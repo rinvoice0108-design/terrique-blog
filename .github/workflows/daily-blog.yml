@@ -37,9 +37,9 @@ jobs:
           mkdir -p knowledge/tone-samples knowledge/patterns output
           printf '%s' "$BRAND_FACTS_MD" > knowledge/brand-facts.md
           printf '%s' "$BANNED_WORDS_JSON" > knowledge/banned-words.json
-          [ -n "$TONE_SAMPLES" ] && printf '%s' "$TONE_SAMPLES" > knowledge/tone-samples/real-blog-posts.txt
-          [ -n "$WRITING_PLAYBOOK" ] && printf '%s' "$WRITING_PLAYBOOK" > knowledge/patterns/writing-playbook.txt
-          [ -n "$CONVERSION_BENCHMARKS" ] && printf '%s' "$CONVERSION_BENCHMARKS" > knowledge/conversion-benchmarks.md
+          if [ -n "$TONE_SAMPLES" ]; then printf '%s' "$TONE_SAMPLES" > knowledge/tone-samples/real-blog-posts.txt; fi
+          if [ -n "$WRITING_PLAYBOOK" ]; then printf '%s' "$WRITING_PLAYBOOK" > knowledge/patterns/writing-playbook.txt; fi
+          if [ -n "$CONVERSION_BENCHMARKS" ]; then printf '%s' "$CONVERSION_BENCHMARKS" > knowledge/conversion-benchmarks.md; fi
 
       - name: Create .env
         run: |
