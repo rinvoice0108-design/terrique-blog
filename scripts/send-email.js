@@ -72,11 +72,20 @@ export async function sendEmail(posts, env) {
 </div>
 </body></html>`;
 
+  // 이미지 첨부파일 수집
+  const attachments = [];
+  posts.forEach(p => {
+    (p.images || []).forEach(img => {
+      attachments.push({ filename: `[${p.keyword}] ${img.filename}`, path: img.path });
+    });
+  });
+
   await transporter.sendMail({
     from: `테리크 블로그 <${GMAIL_USER}>`,
     to: GMAIL_USER,
     subject: `[테리크 블로그] ${today} 포스트 ${posts.length}개 완성`,
-    html
+    html,
+    attachments
   });
 
   console.log(`[email] ✓ 발송 완료 → ${GMAIL_USER}`);

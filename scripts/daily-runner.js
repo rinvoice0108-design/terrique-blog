@@ -1,7 +1,7 @@
 // scripts/daily-runner.js
 // 매일 9시 자동 실행: Google Sheets → 키워드 2개 선택 → /blog-new → Gmail 발송
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -127,6 +127,15 @@ function buildPostData(post) {
     try { metadata = JSON.parse(readFileSync(metaPath, 'utf8')); } catch {}
   }
 
+  // 이미지 파일 수집
+  const imagesDir = join(folder, 'images');
+  const images = [];
+  if (existsSync(imagesDir)) {
+    readdirSync(imagesDir)
+      .filter(f => /\.(png|jpg|jpeg|gif)$/i.test(f))
+      .forEach(f => images.push({ filename: f, path: join(imagesDir, f) }));
+  }
+
   return {
     keyword: post.keyword,
     title: post.title,
@@ -134,6 +143,7 @@ function buildPostData(post) {
     excerpt,
     fullContent,
     metadata,
+    images,
     isCI,
     previewPath: isCI ? null : `file:///${previewPath.replace(/\\/g, '/')}`
   };
