@@ -1,0 +1,70 @@
+category: premium-towel
+description: 호텔/프리미엄 수건 카테고리 키워드 뱅크
+last_updated: 2026-06-08
+
+keywords:
+  - keyword: "수건"
+    intent: general
+    funnel_stage: interest
+    priority: high
+    competition: unknown
+    suggested_pattern: 11  # 벤치마크형
+    longtails:
+      - "수건 추천"
+      - "수건 종류"
+      - "좋은 수건 고르는 법"
+    last_used: null
+
+  - keyword: "40수 수건"
+    intent: how-to
+    funnel_stage: comparison
+    priority: high
+    competition: unknown
+    suggested_pattern: 7   # 전문 지식 교육형
+    longtails:
+      - "40수 수건 차이"
+      - "40수 수건 추천"
+      - "수건 수 뜻"
+    last_used: null
+
+  - keyword: "코마사 수건"
+    intent: how-to
+    funnel_stage: comparison
+    priority: high
+    competition: unknown
+    suggested_pattern: 7
+    longtails:
+      - "코마사 수건이란"
+      - "코마사 수건 차이"
+      - "코마사 뜻"
+    last_used: null
+
+  - keyword: "수건 브랜드"
+    intent: comparison
+    funnel_stage: comparison
+    priority: high
+    competition: unknown
+    suggested_pattern: 10  # 업체 선택 기준 교육형
+    longtails:
+      - "수건 브랜드 추천"
+      - "국내 수건 브랜드"
+      - "프리미엄 수건 브랜드"
+    last_used: null
+
+  - keyword: "수건 교체"
+    intent: how-to
+    funnel_stage: interest
+    priority: medium
+    competition: unknown
+    suggested_pattern: 5   # 실패 사례 + 해결형
+    notes: "교체 주기 벤치마크: 1~2년"
+    longtails:
+      - "수건 교체 주기"
+      - "수건 교체 시기"
+      - "수건 언제 바꿔야"
+    last_used: null
+
+benchmarks:
+  - metric: "수건 평균 교체 주기"
+    value: "1~2년"
+    source: "업계 통상 기준"

@@ -30,3 +30,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# 자동화
+logs/

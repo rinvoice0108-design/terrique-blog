@@ -1,0 +1,70 @@
+name: 테리크 블로그 일일 자동화
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # 매일 00:00 UTC = 09:00 KST
+  workflow_dispatch:       # 수동 실행 (테스트용)
+
+jobs:
+  generate-blog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # keywords-used.txt 커밋용
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Restore knowledge files
+        env:
+          BRAND_FACTS_MD: ${{ secrets.BRAND_FACTS_MD }}
+          BANNED_WORDS_JSON: ${{ secrets.BANNED_WORDS_JSON }}
+          TONE_SAMPLES: ${{ secrets.TONE_SAMPLES }}
+          WRITING_PLAYBOOK: ${{ secrets.WRITING_PLAYBOOK }}
+          CONVERSION_BENCHMARKS: ${{ secrets.CONVERSION_BENCHMARKS }}
+        run: |
+          mkdir -p knowledge/tone-samples knowledge/patterns output
+          printf '%s' "$BRAND_FACTS_MD" > knowledge/brand-facts.md
+          printf '%s' "$BANNED_WORDS_JSON" > knowledge/banned-words.json
+          [ -n "$TONE_SAMPLES" ] && printf '%s' "$TONE_SAMPLES" > knowledge/tone-samples/real-blog-posts.txt
+          [ -n "$WRITING_PLAYBOOK" ] && printf '%s' "$WRITING_PLAYBOOK" > knowledge/patterns/writing-playbook.txt
+          [ -n "$CONVERSION_BENCHMARKS" ] && printf '%s' "$CONVERSION_BENCHMARKS" > knowledge/conversion-benchmarks.md
+
+      - name: Create .env
+        run: |
+          echo "NAVER_CLIENT_ID=${{ secrets.NAVER_CLIENT_ID }}" >> .env
+          echo "NAVER_CLIENT_SECRET=${{ secrets.NAVER_CLIENT_SECRET }}" >> .env
+          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+          echo "GEMINI_IMAGE_MODEL=gemini-3.1-flash-image" >> .env
+          echo "BRAND_NAME=terrique" >> .env
+          echo "BRAND_BG_COLOR=#FFFFFF" >> .env
+          echo "BRAND_FG_COLOR=#1A1A1A" >> .env
+          echo "BRAND_ACCENT=#A08878" >> .env
+          echo "GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}" >> .env
+          echo "SHEETS_ID=${{ secrets.SHEETS_ID }}" >> .env
+
+      - name: Run daily blog generator
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CI: 'true'
+        run: node scripts/daily-runner.js
+
+      - name: Save keyword progress
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add keywords-used.txt
+          git diff --staged --quiet || git commit -m "chore: keywords-used 업데이트 [skip ci]"
+          git push

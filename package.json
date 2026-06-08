@@ -13,6 +13,10 @@
     "duplicate": "node scripts/duplicate-check.js",
     "preview": "node scripts/preview.js",
     "setup-tone": "node scripts/setup-tone-fetch.js",
-    "sanitize-check": "bash scripts/sanitize-check.sh"
+    "sanitize-check": "bash scripts/sanitize-check.sh",
+    "daily": "node scripts/daily-runner.js"
+  },
+  "dependencies": {
+    "nodemailer": "^6.10.1"
   }
 }

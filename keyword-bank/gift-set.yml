@@ -1,0 +1,109 @@
+category: gift-set
+description: 답례품/선물세트 카테고리 키워드 뱅크
+last_updated: 2026-06-08
+
+keywords:
+  - keyword: "집들이 선물"
+    intent: comparison
+    funnel_stage: comparison
+    priority: high
+    competition: unknown
+    suggested_pattern: 10
+    longtails:
+      - "집들이 선물 수건"
+      - "집들이 선물 추천"
+      - "집들이 선물 실용적인 것"
+    last_used: null
+
+  - keyword: "결혼식 답례품"
+    intent: comparison
+    funnel_stage: comparison
+    priority: high
+    competition: unknown
+    suggested_pattern: 4   # 가격/가치 비교형
+    longtails:
+      - "결혼식 답례품 수건"
+      - "결혼 답례품 추천"
+      - "결혼 답례품 실속"
+    last_used: null
+
+  - keyword: "돌잔치 답례품"
+    intent: comparison
+    funnel_stage: comparison
+    priority: high
+    competition: unknown
+    suggested_pattern: 4
+    longtails:
+      - "돌잔치 답례품 수건"
+      - "돌잔치 답례품 추천"
+      - "돌 답례품 인기"
+    last_used: null
+
+  - keyword: "어린이집 답례품"
+    intent: comparison
+    funnel_stage: comparison
+    priority: medium
+    competition: unknown
+    suggested_pattern: 10
+    longtails:
+      - "어린이집 졸업 답례품"
+      - "어린이집 생일 답례품"
+    last_used: null
+
+  - keyword: "조문 답례품"
+    intent: comparison
+    funnel_stage: comparison
+    priority: medium
+    competition: unknown
+    suggested_pattern: 10
+    longtails:
+      - "조문 답례품 수건"
+      - "장례 답례품 추천"
+    last_used: null
+
+  - keyword: "칠순 답례품"
+    intent: comparison
+    funnel_stage: comparison
+    priority: high
+    competition: unknown
+    suggested_pattern: 4
+    longtails:
+      - "칠순 답례품 수건"
+      - "칠순잔치 답례품 추천"
+      - "70세 생일 답례품"
+    last_used: null
+
+  - keyword: "팔순 답례품"
+    intent: comparison
+    funnel_stage: comparison
+    priority: high
+    competition: unknown
+    suggested_pattern: 4
+    longtails:
+      - "팔순 답례품 수건"
+      - "팔순잔치 선물"
+      - "80세 생일 답례품"
+    last_used: null
+
+  - keyword: "유치원 답례품"
+    intent: comparison
+    funnel_stage: comparison
+    priority: medium
+    competition: unknown
+    suggested_pattern: 10
+    longtails:
+      - "유치원 졸업 답례품"
+      - "유치원 생일 답례품"
+    last_used: null
+
+  - keyword: "수건 선물세트"
+    intent: comparison
+    funnel_stage: comparison
+    priority: high
+    competition: unknown
+    suggested_pattern: 11
+    longtails:
+      - "수건 선물세트 추천"
+      - "수건 선물 포장"
+      - "프리미엄 수건 선물"
+    last_used: null

@@ -1,0 +1,122 @@
+category: commercial-towel
+description: 업소용/자수/스트라이프 수건 카테고리 키워드 뱅크
+last_updated: 2026-06-08
+
+keywords:
+  - keyword: "업소용 수건 도매"
+    intent: pricing
+    funnel_stage: comparison
+    priority: high
+    competition: unknown
+    suggested_pattern: 4   # 가격/가치 비교형
+    longtails:
+      - "업소용 수건 도매 가격"
+      - "수건 도매 업체"
+      - "업소용 수건 대량구매"
+    last_used: null
+
+  - keyword: "자수 수건 제작"
+    intent: how-to
+    funnel_stage: comparison
+    priority: high
+    competition: unknown
+    suggested_pattern: 7
+    longtails:
+      - "수건 자수 제작 비용"
+      - "수건 자수 최소수량"
+      - "로고 자수 수건"
+    last_used: null
+
+  - keyword: "스트라이프 수건"
+    intent: comparison
+    funnel_stage: interest
+    priority: medium
+    competition: unknown
+    suggested_pattern: 11
+    longtails:
+      - "스트라이프 수건 추천"
+      - "줄무늬 수건"
+      - "호텔 스트라이프 수건"
+    last_used: null
+
+  - keyword: "펜션 수건"
+    intent: comparison
+    funnel_stage: comparison
+    priority: high
+    competition: unknown
+    suggested_pattern: 10
+    longtails:
+      - "펜션 수건 구매"
+      - "펜션 비품 수건"
+      - "숙박업소 수건 추천"
+    last_used: null
+
+  - keyword: "수건 제작"
+    intent: how-to
+    funnel_stage: comparison
+    priority: high
+    competition: unknown
+    suggested_pattern: 7
+    longtails:
+      - "수건 OEM 제작"
+      - "수건 소량 제작"
+      - "맞춤 수건 제작"
+    last_used: null
+
+  - keyword: "미용실 수건"
+    intent: comparison
+    funnel_stage: comparison
+    priority: medium
+    competition: unknown
+    suggested_pattern: 10
+    longtails:
+      - "미용실 수건 추천"
+      - "미용실 타월 종류"
+      - "미용실 업소용 수건"
+    last_used: null
+
+  - keyword: "헬스장 수건"
+    intent: comparison
+    funnel_stage: comparison
+    priority: medium
+    competition: unknown
+    suggested_pattern: 10
+    longtails:
+      - "헬스장 수건 구매"
+      - "스포츠 센터 수건"
+      - "운동 수건 도매"
+    last_used: null
+
+  - keyword: "풀빌라 수건"
+    intent: comparison
+    funnel_stage: comparison
+    priority: medium
+    competition: unknown
+    suggested_pattern: 10
+    longtails:
+      - "풀빌라 수건 추천"
+      - "리조트 수건 구매"
+    last_used: null
+
+  - keyword: "모텔 수건"
+    intent: comparison
+    funnel_stage: comparison
+    priority: medium
+    competition: unknown
+    suggested_pattern: 4
+    longtails:
+      - "모텔 수건 도매"
+      - "모텔 비품 수건"
+    last_used: null
+
+  - keyword: "피부샵 수건"
+    intent: comparison
+    funnel_stage: comparison
+    priority: medium
+    competition: unknown
+    suggested_pattern: 10
+    longtails:
+      - "피부관리실 수건"
+      - "에스테틱 수건 추천"
+      - "피부샵 비품 수건"
+    last_used: null
