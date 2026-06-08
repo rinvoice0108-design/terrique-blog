@@ -2,14 +2,46 @@ name: 테리크 블로그 일일 자동화
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 매일 00:00 UTC = 09:00 KST
-  workflow_dispatch:       # 수동 실행 (테스트용)
+    # Sun-Thu 23:00 UTC = Mon-Fri 08:00 KST
+    # 생성(~45분) 후 메일 발송 → 08:45~09:00 KST 수신
+    - cron: '0 23 * * 0-4'
+  workflow_dispatch:  # 수동 실행 (공휴일 체크 자동 건너뜀)
 
 jobs:
+  # ── Job 1: 평일·공휴일 게이트 ────────────────────────────────────
+  schedule-check:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.gate.outputs.should_run }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: 평일·공휴일 체크
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "수동 실행 — 공휴일 체크 건너뜀"
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          elif node scripts/check-holiday.js; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ── Job 2: 블로그 생성 + 메일 발송 ──────────────────────────────
   generate-blog:
+    needs: schedule-check
+    if: needs.schedule-check.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     permissions:
-      contents: write      # keywords-used.txt 커밋용
+      contents: write
 
     steps:
       - name: Checkout
@@ -35,8 +67,8 @@ jobs:
           CONVERSION_BENCHMARKS: ${{ secrets.CONVERSION_BENCHMARKS }}
         run: |
           mkdir -p knowledge/tone-samples knowledge/patterns output
-          printf '%s' "$BRAND_FACTS_MD" > knowledge/brand-facts.md
-          printf '%s' "$BANNED_WORDS_JSON" > knowledge/banned-words.json
+          if [ -n "$BRAND_FACTS_MD" ]; then printf '%s' "$BRAND_FACTS_MD" > knowledge/brand-facts.md; fi
+          if [ -n "$BANNED_WORDS_JSON" ]; then printf '%s' "$BANNED_WORDS_JSON" > knowledge/banned-words.json; fi
           if [ -n "$TONE_SAMPLES" ]; then printf '%s' "$TONE_SAMPLES" > knowledge/tone-samples/real-blog-posts.txt; fi
           if [ -n "$WRITING_PLAYBOOK" ]; then printf '%s' "$WRITING_PLAYBOOK" > knowledge/patterns/writing-playbook.txt; fi
           if [ -n "$CONVERSION_BENCHMARKS" ]; then printf '%s' "$CONVERSION_BENCHMARKS" > knowledge/conversion-benchmarks.md; fi
@@ -74,4 +106,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add keywords-used.txt
           git diff --staged --quiet || git commit -m "chore: keywords-used 업데이트 [skip ci]"
-          git push
+          git stash && git pull --rebase && git stash pop && git push || true
