@@ -54,11 +54,18 @@ jobs:
           echo "GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}" >> .env
           echo "SHEETS_ID=${{ secrets.SHEETS_ID }}" >> .env
 
+      - name: Check output folder before
+        run: ls -la output/ || echo "output 폴더 없음"
+
       - name: Run daily blog generator
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CI: 'true'
         run: node scripts/daily-runner.js
+
+      - name: Check output folder after
+        if: always()
+        run: find output/ -type f | head -30 || echo "output 파일 없음"
 
       - name: Save keyword progress
         if: always()

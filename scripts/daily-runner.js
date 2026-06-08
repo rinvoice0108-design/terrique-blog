@@ -191,6 +191,15 @@ async function main() {
   }
 
   const postData = newPosts.map(buildPostData);
+
+  // 디버그: 파일 경로 및 내용 확인
+  postData.forEach((p, i) => {
+    console.log(`[debug] 포스트 ${i+1}: ${p.folder}`);
+    console.log(`[debug] fullContent 길이: ${p.fullContent?.length || 0}`);
+    console.log(`[debug] 이미지 수: ${p.images?.length || 0}`);
+    console.log(`[debug] isCI: ${p.isCI}`);
+  });
+
   const { sendEmail } = await import('./send-email.js');
   await sendEmail(postData, env);
 
