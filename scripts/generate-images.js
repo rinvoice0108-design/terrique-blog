@@ -1,14 +1,8 @@
 #!/usr/bin/env node
 /**
  * 블로그 이미지 생성기
- * Nano Banana Pro (Gemini 3 Pro Image) REST API 직접 호출.
+ * Nano Banana Pro (Gemini Image) REST API 직접 호출.
  * 외부 의존성 없음 — Node 20+ 내장 fetch 사용.
- *
- * 브랜드 시스템은 환경 변수로 주입 (/setup-domain이 .env에 자동 작성):
- *   BRAND_NAME      — 이미지에 박힐 브랜드명 (정확한 표기, 대소문자 그대로)
- *   BRAND_BG_COLOR  — 배경색 hex (기본 #F7F6F2)
- *   BRAND_FG_COLOR  — 본문 텍스트 hex (기본 #1A1A1A)
- *   BRAND_ACCENT    — 포인트 색 hex (기본 #D97A3A)
  *
  * Usage:
  *   GEMINI_API_KEY=xxx node scripts/generate-images.js \
@@ -16,6 +10,7 @@
  *     --points "p1|||p2|||p3" \
  *     --quote "..." \
  *     --steps "s1|||s2|||s3" \
+ *     --subject "블로그 핵심 주제 한 줄 설명" \
  *     --output "output/folder/images"
  */
 
@@ -50,12 +45,11 @@ const splitList = (s) =>
     .filter(Boolean);
 
 // ────────────────────────────────────────────────
-// 브랜드 시스템 (환경 변수 기반 — /setup-domain이 설정)
+// 브랜드 컬러 시스템 (환경 변수 기반)
 // ────────────────────────────────────────────────
-const BRAND_NAME = process.env.BRAND_NAME || 'YOUR BRAND';
-const BG_COLOR   = process.env.BRAND_BG_COLOR || '#F7F6F2';
-const FG_COLOR   = process.env.BRAND_FG_COLOR || '#1A1A1A';
-const ACCENT     = process.env.BRAND_ACCENT   || '#D97A3A';
+const BG_COLOR = process.env.BRAND_BG_COLOR || '#F7F6F2';
+const FG_COLOR = process.env.BRAND_FG_COLOR || '#1A1A1A';
+const ACCENT   = process.env.BRAND_ACCENT   || '#D97A3A';
 
 const BRAND_STYLE = [
   'Minimal Korean editorial infographic design',
@@ -63,17 +57,18 @@ const BRAND_STYLE = [
   'premium clean sans-serif typography (Pretendard-like)',
   'generous whitespace, clear visual hierarchy',
   'information-diagram first: prefer charts, tables, flow nodes, comparison layouts over decorative illustration',
-  'NO people, NO stock-photo aesthetic, NO random clutter, NO fake logos, NO watermark, NO heavy gradient or glow',
+  'NO logos, NO watermarks, NO brand names',
   'Korean text must render perfectly legible and sharp',
-  `The only brand name shown is exactly "${BRAND_NAME}" — use this exact spelling and capitalization`,
 ].join('. ');
 
+// ────────────────────────────────────────────────
+// 디자인 이미지 프롬프트 (브랜드 로고 없음)
+// ────────────────────────────────────────────────
 function thumbnailPrompt({ title, keyword }) {
   return [
     `Create a 16:9 Korean blog thumbnail — editorial infographic style, not an illustration.`,
     `Large bold Korean headline (must be perfectly legible): "${title}"`,
     `Small pill-shaped tag in top-left corner with text: "${keyword}"`,
-    `Bottom-right corner small label: "${BRAND_NAME}"`,
     `Add one subtle visual element that hints at data/diagram (e.g., a small bar chart, numbered badge, or flow arrow) — not a photo.`,
     BRAND_STYLE,
     `Layout: headline left-aligned, diagram element right side, balanced negative space.`,
@@ -90,7 +85,6 @@ function infographicPrompt({ keyword, points }) {
     `Top title in Korean: "${keyword} 핵심 포인트"`,
     `Below the title, render these items as a vertical stack of numbered cards (rounded rectangles with a left accent bar), each with the number prominently displayed and the Korean text rendered clearly:`,
     numbered,
-    `Bottom footer center: "${BRAND_NAME}"`,
     BRAND_STYLE,
     `Consistent spacing between cards, clear numeric hierarchy, no icons of people.`,
   ].join('\n');
@@ -101,7 +95,6 @@ function quoteCardPrompt({ quote, keyword }) {
     `Create a 1:1 square Korean quote card — clean editorial typography focus.`,
     `Small label at top in warm-orange: "${keyword}"`,
     `Center the large Korean quote in bold sans-serif (not serif), perfectly legible: "${quote}"`,
-    `Bottom-right signature: "— ${BRAND_NAME}"`,
     `Oversized decorative quotation marks as faint background element (very low opacity).`,
     BRAND_STYLE,
     `No people, no photographic elements.`,
@@ -119,16 +112,65 @@ function processPrompt({ keyword, steps }) {
     `Render this as a horizontal row of numbered pill-shaped nodes connected by arrows, each node containing its Korean label clearly:`,
     numberedSteps,
     `Each node: rounded rectangle with number badge + Korean label. Arrows between nodes in warm-orange.`,
-    `Bottom-right corner: "${BRAND_NAME}"`,
     BRAND_STYLE,
     `Pure schematic diagram, no background imagery, no people.`,
   ].join('\n');
 }
 
 // ────────────────────────────────────────────────
+// 상황 이미지 프롬프트 (실사풍 라이프스타일 3종)
+// ────────────────────────────────────────────────
+function scenePrompt1({ keyword, subject }) {
+  const ctx = subject || keyword;
+  return [
+    `Create a high-quality lifestyle photography image.`,
+    `Theme: "${ctx}" — Korean lifestyle magazine editorial aesthetic.`,
+    `Scene: Premium product beautifully arranged in a serene, minimal home or spa environment.`,
+    `Perspective: wide environmental shot showing the product in its natural setting.`,
+    `Lighting: warm, soft natural window light. Gentle shadows. Golden hour feel.`,
+    `Style: clean, airy, Scandinavian-Korean minimal. High-end editorial photography.`,
+    `Color palette: warm whites, soft creams, muted natural tones, occasional warm accent.`,
+    `NO text overlays, NO logos, NO watermarks, NO Korean text.`,
+    `NO faces. Occasional hands OK if natural. Focus on the product and environment.`,
+    `Aspect ratio: 4:3. Ultra photorealistic, shot with a full-frame camera, shallow depth of field.`,
+  ].join('\n');
+}
+
+function scenePrompt2({ keyword, subject }) {
+  const ctx = subject || keyword;
+  return [
+    `Create a high-quality close-up product photography image.`,
+    `Theme: "${ctx}" — premium product texture and quality detail.`,
+    `Scene: extreme close-up of the product surface showing texture, material quality, and craftsmanship.`,
+    `Perspective: macro/close-up shot focusing on material texture, weave pattern, or fine details.`,
+    `Lighting: soft studio light that reveals texture — slightly directional to show depth and softness.`,
+    `Style: luxury product catalog photography. Clean background (white or very light neutral).`,
+    `Color palette: natural material colors, clean neutrals.`,
+    `NO text overlays, NO logos, NO watermarks.`,
+    `Aspect ratio: 1:1. Ultra photorealistic, extreme detail, razor-sharp focus on texture.`,
+  ].join('\n');
+}
+
+function scenePrompt3({ keyword, subject }) {
+  const ctx = subject || keyword;
+  return [
+    `Create a lifestyle mood photography image.`,
+    `Theme: "${ctx}" — the emotional benefit and end-result experience.`,
+    `Scene: cozy, inviting atmosphere showing someone enjoying the result or benefit — a feeling of comfort, luxury, or well-being.`,
+    `Perspective: medium shot, intimate and warm. Shows the lifestyle context and end benefit.`,
+    `Lighting: warm indoor light, soft and flattering. Cozy and aspirational mood.`,
+    `Style: Korean lifestyle blog photography — relatable yet aspirational. Like a premium Instagram flat-lay or lifestyle photo.`,
+    `Color palette: warm neutrals, soft pastels, cozy tones.`,
+    `NO text overlays, NO logos, NO watermarks, NO Korean text.`,
+    `Faces cropped or turned away if present. Focus on mood and product interaction.`,
+    `Aspect ratio: 3:4 vertical. Photorealistic, warm and inviting quality.`,
+  ].join('\n');
+}
+
+// ────────────────────────────────────────────────
 // Gemini 호출
 // ────────────────────────────────────────────────
-const MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-3-pro-image-preview';
+const MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image';
 
 async function generateOne(prompt) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -166,13 +208,13 @@ async function generateOne(prompt) {
 // ────────────────────────────────────────────────
 async function main() {
   const args = parseArgs(process.argv);
-  const { title, keyword, quote, output } = args;
+  const { title, keyword, quote, subject, output } = args;
   const points = splitList(args.points);
   const steps = splitList(args.steps);
 
   if (!title || !keyword || !output) {
     console.error(
-      'Usage: --title <t> --keyword <k> --output <dir> [--points a|||b] [--quote q] [--steps a|||b]'
+      'Usage: --title <t> --keyword <k> --output <dir> [--points a|||b] [--quote q] [--steps a|||b] [--subject <한줄설명>]'
     );
     process.exit(2);
   }
@@ -184,6 +226,7 @@ async function main() {
   await mkdir(output, { recursive: true });
 
   const jobs = [
+    // ── 기존 디자인 이미지 4종 (로고 없음) ──────────────────────
     { name: 'thumbnail', prompt: thumbnailPrompt({ title, keyword }) },
     {
       name: 'infographic',
@@ -206,6 +249,10 @@ async function main() {
         steps: steps.length ? steps : ['리서치', '기획', '제작', '검수'],
       }),
     },
+    // ── 상황 이미지 3종 (실사풍 라이프스타일) ────────────────────
+    { name: 'scene-1', prompt: scenePrompt1({ keyword, subject }) },
+    { name: 'scene-2', prompt: scenePrompt2({ keyword, subject }) },
+    { name: 'scene-3', prompt: scenePrompt3({ keyword, subject }) },
   ];
 
   let okCount = 0;

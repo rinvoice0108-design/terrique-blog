@@ -31,13 +31,19 @@ API 인증 실패 시 웹 검색 기반으로 대체 리서치.
 - `output/<폴더>/` 에 저장 → 훅이 자동으로 품질검사·유사도검사 실행
 
 ## 3. 이미지 생성 (STEP 3)
+콘텐츠 작성이 끝난 뒤, 글의 핵심 주제를 한 줄로 요약한 `--subject` 값을 준비하세요 (예: "호텔급 면 수건의 품질 차이와 선택 기준").
+
 ```bash
 set -a && . ./.env && set +a && node scripts/generate-images.js \
   --title "..." --keyword "$ARGUMENTS" \
   --points "..." --quote "..." --steps "..." \
+  --subject "글 핵심 주제 한 줄 요약" \
   --output "output/<폴더>/images"
 ```
-브랜드명/컬러팔레트는 환경변수로 주입됨 (`/setup-domain`에서 설정).
+
+총 7장 생성 (디자인 4장 + 상황 이미지 3장):
+- `thumbnail.png` / `infographic.png` / `quote-card.png` / `process.png` — 정보 디자인형
+- `scene-1.png` (라이프스타일 환경컷) / `scene-2.png` (텍스처 클로즈업) / `scene-3.png` (무드 감성컷) — 실사풍
 
 ## 4. 품질 검증 (STEP 4)
 훅이 자동 실행하지만, 경고가 나오면 본문을 수정하고 재검사.
@@ -52,6 +58,6 @@ set -a && . ./.env && set +a && node scripts/generate-images.js \
 ## 완료 후 사용자에게 보고할 것
 - 제목 / 글자수 / 패턴 / 톤 변주 조합
 - 품질검사 결과, 유사도 검사 결과
-- 이미지 4장 생성 여부
+- 이미지 7장 생성 여부 (디자인 4장 + 상황 이미지 3장)
 - 발행 전 사람이 확인해야 할 항목 (수치·레퍼런스)
 - 다음 단계: `/blog-preview <폴더>` 로 발행 어시스턴트 실행
