@@ -1,9 +1,10 @@
 // scripts/daily-runner.js
-// 매일 9시 자동 실행: Google Sheets → 키워드 2개 선택 → /blog-new → Gmail 발송
+// 매일 자동 실행: Google Sheets → 미사용 키워드 2개 선택 → /blog-new → 날짜 기록 → Gmail 발송
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { fetchKeywordsWithStatus, markKeywordUsed, restoreServiceAccount } from './sheets-tracker.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -23,48 +24,15 @@ function loadEnv() {
   return { ...process.env, ...env };
 }
 
-// ── Google Sheets 공개 CSV 로드 ──────────────────────────────────
-async function fetchKeywords(sheetsId) {
-  const url = `https://docs.google.com/spreadsheets/d/${sheetsId}/export?format=csv`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Sheets 접근 실패 (${res.status})`);
-  const csv = await res.text();
-  const rows = csv.split('\n').map(l => l.split(',')[0].trim().replace(/^"|"$/g, '').trim());
-  const keywords = rows.filter(l => {
-    if (!l || l.startsWith('#')) return false;
-    if (/^https?:\/\//.test(l)) return false;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(l)) return false;
-    if (/^\d+$/.test(l)) return false;
-    return true;
-  });
-  const headerWords = ['키워드', 'keyword', '순번', '번호', 'no', 'title', '제목'];
-  if (keywords.length > 0 && headerWords.some(h => keywords[0].toLowerCase().includes(h))) {
-    keywords.shift();
-  }
-  return keywords;
+function todayKST() {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
 }
 
-// ── 키워드 추적 ──────────────────────────────────────────────────
-function getUsedKeywords() {
-  const p = join(ROOT, 'keywords-used.txt');
-  if (!existsSync(p)) return [];
-  return readFileSync(p, 'utf8').split('\n').map(l => l.trim()).filter(Boolean);
-}
-
-function pickNext(all, used, n = 2) {
-  const unused = all.filter(k => !used.includes(k));
-  if (unused.length < n) {
-    writeFileSync(join(ROOT, 'keywords-used.txt'), '');
-    console.log('[runner] 키워드 순환 — 처음부터 다시 시작');
-    return all.slice(0, n);
-  }
-  return unused.slice(0, n);
-}
-
-function markUsed(keywords) {
-  const p = join(ROOT, 'keywords-used.txt');
-  const prev = existsSync(p) ? readFileSync(p, 'utf8') : '';
-  writeFileSync(p, prev + keywords.join('\n') + '\n');
+// ── 미사용 키워드 2개 선택 ────────────────────────────────────────
+function pickUnused(allRows, n = 2) {
+  const unused = allRows.filter(r => !r.usedDate);
+  if (unused.length === 0) return { picked: [], reset: true };
+  return { picked: unused.slice(0, n), reset: false };
 }
 
 // ── 블로그 생성 ──────────────────────────────────────────────────
@@ -83,7 +51,7 @@ function runBlogNew(keyword) {
   }
 }
 
-// ── output 폴더 직접 스캔 (index.json 의존 없음) ─────────────────
+// ── output 폴더 스캔 ─────────────────────────────────────────────
 function getOutputFolderSet() {
   const outputDir = join(ROOT, 'output');
   if (!existsSync(outputDir)) return new Set();
@@ -156,21 +124,36 @@ async function main() {
   if (!env.SHEETS_ID) { console.error('[runner] .env에 SHEETS_ID 없음'); process.exit(1); }
   if (!env.GMAIL_APP_PASSWORD) { console.error('[runner] .env에 GMAIL_APP_PASSWORD 없음'); process.exit(1); }
 
-  console.log('[runner] Google Sheets 키워드 로드 중...');
-  const allKeywords = await fetchKeywords(env.SHEETS_ID);
-  console.log(`[runner] 총 ${allKeywords.length}개 키워드`);
+  // service-account.json 복원 (GitHub Actions 환경)
+  restoreServiceAccount();
 
-  const usedKeywords = getUsedKeywords();
-  const keywords = pickNext(allKeywords, usedKeywords, 2);
-  console.log(`[runner] 오늘의 키워드: ${keywords.join(' / ')}`);
+  console.log('[runner] Google Sheets 키워드 로드 중...');
+  const allRows = await fetchKeywordsWithStatus(env.SHEETS_ID);
+  console.log(`[runner] 총 ${allRows.length}개 키워드`);
+
+  const used = allRows.filter(r => r.usedDate).length;
+  const unused = allRows.filter(r => !r.usedDate).length;
+  console.log(`[runner] 사용됨: ${used}개 / 미사용: ${unused}개`);
+
+  let { picked, reset } = pickUnused(allRows);
+
+  if (reset) {
+    console.log('[runner] 모든 키워드 사용 완료 — 순환 초기화 후 처음부터 시작');
+    // B열 전체 초기화 후 다시 선택
+    const { clearAllUsedDates } = await import('./sheets-tracker.js');
+    await clearAllUsedDates(env.SHEETS_ID, allRows);
+    const refreshed = await fetchKeywordsWithStatus(env.SHEETS_ID);
+    picked = pickUnused(refreshed).picked;
+  }
+
+  console.log(`[runner] 오늘의 키워드: ${picked.map(r => r.keyword).join(' / ')}`);
 
   // 실행 전 폴더 목록 캡처
   const beforeFolders = getOutputFolderSet();
-  console.log(`[runner] 기존 output 폴더 수: ${beforeFolders.size}`);
 
   const succeeded = [];
-  for (const kw of keywords) {
-    if (runBlogNew(kw)) succeeded.push(kw);
+  for (const row of picked) {
+    if (runBlogNew(row.keyword)) succeeded.push(row);
   }
 
   if (succeeded.length === 0) {
@@ -178,7 +161,12 @@ async function main() {
     process.exit(1);
   }
 
-  markUsed(succeeded);
+  // Google Sheets B열에 사용일 기록
+  const today = todayKST();
+  for (const row of succeeded) {
+    const ok = await markKeywordUsed(env.SHEETS_ID, row.rowIndex, today);
+    if (ok) console.log(`[runner] 시트 기록: "${row.keyword}" → ${today}`);
+  }
 
   // 실행 후 새로 생긴 폴더 감지
   const afterFolders = getOutputFolderSet();

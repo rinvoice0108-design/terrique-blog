@@ -92,18 +92,10 @@ jobs:
       - name: Run daily blog generator
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           CI: 'true'
         run: node scripts/daily-runner.js
 
       - name: Check output folder after
         if: always()
         run: find output/ -type f | head -30 || echo "output 파일 없음"
-
-      - name: Save keyword progress
-        if: always()
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add keywords-used.txt
-          git diff --staged --quiet || git commit -m "chore: keywords-used 업데이트 [skip ci]"
-          git stash && git pull --rebase && git stash pop && git push || true
