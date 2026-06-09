@@ -1,5 +1,9 @@
 # 환경 변수
 .env
+
+# Google 인증 (절대 git에 올리지 않음)
+service-account.json
+*-credentials.json
 .env.local
 .env.*.local
 
