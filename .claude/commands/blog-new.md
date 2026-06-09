@@ -30,6 +30,23 @@ API 인증 실패 시 웹 검색 기반으로 대체 리서치.
 - `post.md` 와 `post.html` 작성
 - `output/<폴더>/` 에 저장 → 훅이 자동으로 품질검사·유사도검사 실행
 
+글 작성 완료 후 `output/<폴더>/metadata.json` 을 아래 필드 포함해 Write:
+```json
+{
+  "keyword": "<키워드>",
+  "title": "<글 제목>",
+  "description": "<메타 설명 80자 이내>",
+  "tags": ["태그1", "태그2", "태그3"],
+  "pattern": "<사용한 패턴명>",
+  "intro_type": "<도입부 유형>",
+  "created_at": "<YYYY-MM-DD>",
+  "image_points": "<핵심 포인트 3개 |||로 구분 예: 흡수력 우수|||부드러운 촉감|||오래 사용 가능>",
+  "image_quote": "<글에서 가장 임팩트 있는 문구 1줄>",
+  "image_steps": "<단계 3개 |||로 구분 예: 올바른 세탁|||완전 건조|||보관법>",
+  "image_subject": "<이미지 생성용 핵심 주제 한 줄>"
+}
+```
+
 ## 3. 이미지 생성 (STEP 3)
 콘텐츠 작성이 끝난 뒤, 글의 핵심 주제를 한 줄로 요약한 `--subject` 값을 준비하세요 (예: "호텔급 면 수건의 품질 차이와 선택 기준").
 
@@ -51,9 +68,31 @@ set -a && . ./.env && set +a && node scripts/generate-images.js \
 의료/뷰티 키워드인 경우 `medical-law-checker` 서브에이전트도 호출.
 
 ## 5. 최종 패키지 (STEP 5)
-- `metadata.json` (패턴 번호·톤 변주·품질 리포트)
-- `guide.md` (편집 가이드 · 사실 확인 체크리스트 · 이미지 삽입 위치)
-- `output/_index.json` 에 새 글 항목 추가 + `recent_rotation` 갱신
+
+`guide.md` 작성 (편집 가이드 · 이미지 삽입 위치 · 사실 확인 체크리스트).
+
+`output/_index.json` Read 후 아래 형식으로 업데이트해 Write:
+```json
+{
+  "last_updated": "<오늘 YYYY-MM-DD>",
+  "posts": [
+    ...기존 posts 배열...,
+    {
+      "folder": "<폴더명>",
+      "keyword": "<키워드>",
+      "title": "<제목>",
+      "pattern": "<패턴>",
+      "intro_type": "<도입부유형>",
+      "created_at": "<날짜>"
+    }
+  ],
+  "recent_rotation": {
+    "patterns_used": [최근 5개 패턴 (오래된 것부터 새 것 순)],
+    "intro_types_used": [최근 5개 도입부],
+    "tone_signatures_used": [이번 글에 사용한 시그니처 표현들]
+  }
+}
+```
 
 ## 완료 후 사용자에게 보고할 것
 - 제목 / 글자수 / 패턴 / 톤 변주 조합
