@@ -2,9 +2,9 @@ name: 테리크 블로그 일일 자동화
 
 on:
   schedule:
-    # Sun-Thu 23:00 UTC = Mon-Fri 08:00 KST
-    # 생성(~45분) 후 메일 발송 → 08:45~09:00 KST 수신
-    - cron: '0 23 * * 0-4'
+    # Sun-Thu 22:43 UTC = Mon-Fri 07:43 KST
+    # 생성(~45분) 후 메일 발송 → 08:28~09:00 KST 수신
+    - cron: '43 22 * * 0-4'
   workflow_dispatch:  # 수동 실행 (공휴일 체크 자동 건너뜀)
 
 jobs:
