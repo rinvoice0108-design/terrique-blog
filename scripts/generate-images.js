@@ -51,120 +51,112 @@ const BG_COLOR = process.env.BRAND_BG_COLOR || '#F7F6F2';
 const FG_COLOR = process.env.BRAND_FG_COLOR || '#1A1A1A';
 const ACCENT   = process.env.BRAND_ACCENT   || '#D97A3A';
 
-const BRAND_STYLE = [
-  'Minimal Korean editorial infographic design',
-  `off-white background (${BG_COLOR}), deep charcoal (${FG_COLOR}) text, single point color (${ACCENT})`,
-  'premium clean sans-serif typography (Pretendard-like)',
-  'generous whitespace, clear visual hierarchy',
-  'information-diagram first: prefer charts, tables, flow nodes, comparison layouts over decorative illustration',
+const PHOTO_STYLE = [
+  'warm soft natural lighting, shallow depth of field',
+  'Korean lifestyle magazine editorial photography',
+  'clean minimal background, warm neutral tones',
+  'NO faces shown directly, NO text overlays, NO logos, NO watermarks',
+  'ultra photorealistic, full-frame camera quality',
+].join('. ');
+
+const DESIGN_STYLE = [
+  `Minimal Korean editorial design. off-white background (${BG_COLOR}), deep charcoal text (${FG_COLOR}), warm accent (${ACCENT})`,
+  'clean sans-serif typography, generous whitespace, clear hierarchy',
   'NO logos, NO watermarks, NO brand names',
   'Korean text must render perfectly legible and sharp',
 ].join('. ');
 
 // ────────────────────────────────────────────────
-// 디자인 이미지 프롬프트 (브랜드 로고 없음)
+// 콘텐츠 매칭 이미지 7종 (글 주제에 맞게 자연스럽게)
 // ────────────────────────────────────────────────
-function thumbnailPrompt({ title, keyword }) {
-  return [
-    `Create a 16:9 Korean blog thumbnail — editorial infographic style, not an illustration.`,
-    `Large bold Korean headline (must be perfectly legible): "${title}"`,
-    `Small pill-shaped tag in top-left corner with text: "${keyword}"`,
-    `Add one subtle visual element that hints at data/diagram (e.g., a small bar chart, numbered badge, or flow arrow) — not a photo.`,
-    BRAND_STYLE,
-    `Layout: headline left-aligned, diagram element right side, balanced negative space.`,
-  ].join('\n');
-}
-
-function infographicPrompt({ keyword, points }) {
-  const numbered = points
-    .slice(0, 5)
-    .map((p, i) => `${i + 1}. ${p}`)
-    .join('\n');
-  return [
-    `Create a 2:3 vertical Korean infographic poster — pure information diagram, no decorative art.`,
-    `Top title in Korean: "${keyword} 핵심 포인트"`,
-    `Below the title, render these items as a vertical stack of numbered cards (rounded rectangles with a left accent bar), each with the number prominently displayed and the Korean text rendered clearly:`,
-    numbered,
-    BRAND_STYLE,
-    `Consistent spacing between cards, clear numeric hierarchy, no icons of people.`,
-  ].join('\n');
-}
-
-function quoteCardPrompt({ quote, keyword }) {
-  return [
-    `Create a 1:1 square Korean quote card — clean editorial typography focus.`,
-    `Small label at top in warm-orange: "${keyword}"`,
-    `Center the large Korean quote in bold sans-serif (not serif), perfectly legible: "${quote}"`,
-    `Oversized decorative quotation marks as faint background element (very low opacity).`,
-    BRAND_STYLE,
-    `No people, no photographic elements.`,
-  ].join('\n');
-}
-
-function processPrompt({ keyword, steps }) {
-  const numberedSteps = steps
-    .slice(0, 6)
-    .map((s, i) => `${i + 1}) ${s}`)
-    .join('   →   ');
-  return [
-    `Create a 4:3 Korean horizontal process flow diagram — clean schematic, not an illustration.`,
-    `Top title in Korean: "${keyword} 진행 프로세스"`,
-    `Render this as a horizontal row of numbered pill-shaped nodes connected by arrows, each node containing its Korean label clearly:`,
-    numberedSteps,
-    `Each node: rounded rectangle with number badge + Korean label. Arrows between nodes in warm-orange.`,
-    BRAND_STYLE,
-    `Pure schematic diagram, no background imagery, no people.`,
-  ].join('\n');
-}
-
-// ────────────────────────────────────────────────
-// 상황 이미지 프롬프트 (실사풍 라이프스타일 3종)
-// ────────────────────────────────────────────────
-function scenePrompt1({ keyword, subject }) {
+function buildContentPrompts({ title, keyword, subject, points, quote }) {
   const ctx = subject || keyword;
-  return [
-    `Create a high-quality lifestyle photography image.`,
-    `Theme: "${ctx}" — Korean lifestyle magazine editorial aesthetic.`,
-    `Scene: Premium product beautifully arranged in a serene, minimal home or spa environment.`,
-    `Perspective: wide environmental shot showing the product in its natural setting.`,
-    `Lighting: warm, soft natural window light. Gentle shadows. Golden hour feel.`,
-    `Style: clean, airy, Scandinavian-Korean minimal. High-end editorial photography.`,
-    `Color palette: warm whites, soft creams, muted natural tones, occasional warm accent.`,
-    `NO text overlays, NO logos, NO watermarks, NO Korean text.`,
-    `NO faces. Occasional hands OK if natural. Focus on the product and environment.`,
-    `Aspect ratio: 4:3. Ultra photorealistic, shot with a full-frame camera, shallow depth of field.`,
-  ].join('\n');
-}
+  const mainPoint  = points[0] || ctx;
+  const secondPoint = points[1] || ctx;
+  const thirdPoint  = points[2] || mainPoint;
+  const keyQuote    = quote || title;
 
-function scenePrompt2({ keyword, subject }) {
-  const ctx = subject || keyword;
   return [
-    `Create a high-quality close-up product photography image.`,
-    `Theme: "${ctx}" — premium product texture and quality detail.`,
-    `Scene: extreme close-up of the product surface showing texture, material quality, and craftsmanship.`,
-    `Perspective: macro/close-up shot focusing on material texture, weave pattern, or fine details.`,
-    `Lighting: soft studio light that reveals texture — slightly directional to show depth and softness.`,
-    `Style: luxury product catalog photography. Clean background (white or very light neutral).`,
-    `Color palette: natural material colors, clean neutrals.`,
-    `NO text overlays, NO logos, NO watermarks.`,
-    `Aspect ratio: 1:1. Ultra photorealistic, extreme detail, razor-sharp focus on texture.`,
-  ].join('\n');
-}
-
-function scenePrompt3({ keyword, subject }) {
-  const ctx = subject || keyword;
-  return [
-    `Create a lifestyle mood photography image.`,
-    `Theme: "${ctx}" — the emotional benefit and end-result experience.`,
-    `Scene: cozy, inviting atmosphere showing someone enjoying the result or benefit — a feeling of comfort, luxury, or well-being.`,
-    `Perspective: medium shot, intimate and warm. Shows the lifestyle context and end benefit.`,
-    `Lighting: warm indoor light, soft and flattering. Cozy and aspirational mood.`,
-    `Style: Korean lifestyle blog photography — relatable yet aspirational. Like a premium Instagram flat-lay or lifestyle photo.`,
-    `Color palette: warm neutrals, soft pastels, cozy tones.`,
-    `NO text overlays, NO logos, NO watermarks, NO Korean text.`,
-    `Faces cropped or turned away if present. Focus on mood and product interaction.`,
-    `Aspect ratio: 3:4 vertical. Photorealistic, warm and inviting quality.`,
-  ].join('\n');
+    {
+      name: '01-hero',
+      prompt: [
+        `Create a 16:9 blog hero image for a Korean lifestyle blog article.`,
+        `Article topic: "${ctx}". Article title: "${title}".`,
+        `Scene: Wide editorial lifestyle shot. The subject "${ctx}" beautifully presented in a premium, serene Korean home setting.`,
+        `The image should immediately communicate the article's core topic to a reader scanning the page.`,
+        `Warm window light, confident editorial composition, premium and aspirational feel.`,
+        PHOTO_STYLE,
+        `Aspect ratio: 16:9 wide landscape.`,
+      ].join('\n'),
+    },
+    {
+      name: '02-opening',
+      prompt: [
+        `Create a 4:3 lifestyle scene photography image.`,
+        `Article topic: "${ctx}". Opening context: "${mainPoint}".`,
+        `Scene: A natural, everyday moment that introduces the article's problem or starting situation. Candid and relatable. Medium shot, intimate and warm.`,
+        `Should feel like a real-life moment — not staged. The viewer should see themselves in this scene.`,
+        PHOTO_STYLE,
+        `Aspect ratio: 4:3.`,
+      ].join('\n'),
+    },
+    {
+      name: '03-detail',
+      prompt: [
+        `Create a 1:1 square close-up detail photography image.`,
+        `Article topic: "${ctx}". Focus point: "${secondPoint}".`,
+        `Scene: Macro/close-up shot of the key subject — shows texture, material quality, or a fine detail directly relevant to this aspect of the article.`,
+        `Soft studio lighting revealing texture depth. Very clean neutral background. Ultra-sharp focus on the detail.`,
+        PHOTO_STYLE,
+        `Aspect ratio: 1:1 square.`,
+      ].join('\n'),
+    },
+    {
+      name: '04-tips',
+      prompt: [
+        `Create a 2:3 vertical Korean editorial infographic.`,
+        `Title: "${keyword} 핵심 정리"`,
+        `Render the following points as a clean vertical numbered card layout (each in a rounded card with a warm-orange left accent bar):`,
+        (points.length ? points.slice(0, 5) : [ctx]).map((p, i) => `${i + 1}. ${p}`).join('\n'),
+        DESIGN_STYLE,
+        `Pure information design, no photos, no illustrations. Aspect ratio: 2:3 vertical.`,
+      ].join('\n'),
+    },
+    {
+      name: '05-scene',
+      prompt: [
+        `Create a 4:3 lifestyle moment photography image.`,
+        `Article topic: "${ctx}". Illustrates the benefit: "${thirdPoint}".`,
+        `Scene: A specific practical moment showing the positive outcome — experiencing or using "${ctx}" in a way that delivers the benefit described. Shows the "after" result.`,
+        `Warm, bright, and aspirational. Like a practical tip being visually demonstrated in a premium home.`,
+        PHOTO_STYLE,
+        `Aspect ratio: 4:3.`,
+      ].join('\n'),
+    },
+    {
+      name: '06-highlight',
+      prompt: [
+        `Create a 1:1 square Korean editorial highlight card.`,
+        `Display this key message in large bold Korean sans-serif (must be perfectly legible): "${keyQuote}"`,
+        `Small category label at top: "${keyword}"`,
+        `Style: clean typographic card, oversized faint quotation marks as background accent, strong headline typography.`,
+        DESIGN_STYLE,
+        `No photographic elements — pure typography. Aspect ratio: 1:1 square.`,
+      ].join('\n'),
+    },
+    {
+      name: '07-closing',
+      prompt: [
+        `Create a 3:4 vertical lifestyle mood photography image.`,
+        `Article topic: "${ctx}".`,
+        `Scene: Atmospheric, aspirational closing image. Conveys the desired end-state feeling — comfort, quality, or well-being that the article's topic promises.`,
+        `Beautiful, cozy interior or softly lit environment. Warm and inviting. Premium but attainable.`,
+        `Wide or medium shot. The viewer should feel the article's emotional payoff.`,
+        PHOTO_STYLE,
+        `Aspect ratio: 3:4 vertical.`,
+      ].join('\n'),
+    },
+  ];
 }
 
 // ────────────────────────────────────────────────
@@ -210,11 +202,10 @@ async function main() {
   const args = parseArgs(process.argv);
   const { title, keyword, quote, subject, output } = args;
   const points = splitList(args.points);
-  const steps = splitList(args.steps);
 
   if (!title || !keyword || !output) {
     console.error(
-      'Usage: --title <t> --keyword <k> --output <dir> [--points a|||b] [--quote q] [--steps a|||b] [--subject <한줄설명>]'
+      'Usage: --title <t> --keyword <k> --output <dir> [--points a|||b] [--quote q] [--subject <한줄설명>]'
     );
     process.exit(2);
   }
@@ -225,35 +216,7 @@ async function main() {
 
   await mkdir(output, { recursive: true });
 
-  const jobs = [
-    // ── 기존 디자인 이미지 4종 (로고 없음) ──────────────────────
-    { name: 'thumbnail', prompt: thumbnailPrompt({ title, keyword }) },
-    {
-      name: 'infographic',
-      prompt: infographicPrompt({
-        keyword,
-        points: points.length ? points : [keyword],
-      }),
-    },
-    {
-      name: 'quote-card',
-      prompt: quoteCardPrompt({
-        quote: quote || title,
-        keyword,
-      }),
-    },
-    {
-      name: 'process',
-      prompt: processPrompt({
-        keyword,
-        steps: steps.length ? steps : ['리서치', '기획', '제작', '검수'],
-      }),
-    },
-    // ── 상황 이미지 3종 (실사풍 라이프스타일) ────────────────────
-    { name: 'scene-1', prompt: scenePrompt1({ keyword, subject }) },
-    { name: 'scene-2', prompt: scenePrompt2({ keyword, subject }) },
-    { name: 'scene-3', prompt: scenePrompt3({ keyword, subject }) },
-  ];
+  const jobs = buildContentPrompts({ title, keyword, subject, points, quote });
 
   let okCount = 0;
   const errors = [];

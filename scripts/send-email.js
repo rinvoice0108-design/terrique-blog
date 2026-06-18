@@ -16,10 +16,20 @@ function mdToHtml(md) {
     .replace(/\n/g, '<br>');
 }
 
+const BLOG_LABELS = ['개인 블로그', '브랜드 블로그'];
+const BLOG_BADGE_COLORS = ['#A08878', '#D97A3A'];
+
 function buildCard(p, i) {
+  const blogLabel = BLOG_LABELS[i];
+  const blogBadge = blogLabel
+    ? `<span style="display:inline-block;background:${BLOG_BADGE_COLORS[i]};color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px;letter-spacing:0.5px;vertical-align:middle;margin-left:7px;">[${blogLabel}]</span>`
+    : '';
+
   const header = `
     <div style="background:#1A1A1A;color:#fff;padding:14px 20px;">
-      <div style="font-size:11px;opacity:.5;letter-spacing:1px;">POST ${i + 1} &nbsp;·&nbsp; ${p.keyword}</div>
+      <div style="display:flex;align-items:center;gap:0;">
+        <span style="font-size:11px;opacity:.5;letter-spacing:1px;">POST ${i + 1}</span>${blogBadge}<span style="font-size:11px;opacity:.5;letter-spacing:1px;">&nbsp;·&nbsp; ${p.keyword}</span>
+      </div>
       <div style="font-size:18px;font-weight:700;margin-top:5px;line-height:1.4;">${p.title}</div>
       ${p.metadata?.tags ? `<div style="margin-top:6px;font-size:11px;opacity:.5;">${p.metadata.tags.map(t => '#' + t).join(' ')}</div>` : ''}
     </div>`;
