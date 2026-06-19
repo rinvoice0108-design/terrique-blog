@@ -58,9 +58,9 @@ set -a && . ./.env && set +a && node scripts/generate-images.js \
   --output "output/<폴더>/images"
 ```
 
-총 7장 생성 (디자인 4장 + 상황 이미지 3장):
-- `thumbnail.png` / `infographic.png` / `quote-card.png` / `process.png` — 정보 디자인형
-- `scene-1.png` (라이프스타일 환경컷) / `scene-2.png` (텍스처 클로즈업) / `scene-3.png` (무드 감성컷) — 실사풍
+총 7장 생성 (모두 사진 전용 — 텍스트/타이포그래피 이미지 없음):
+- `01-hero.png` (16:9 히어로 사진) / `02-opening.png` (4:3 상황 오프닝) / `03-detail.png` (1:1 텍스처 클로즈업)
+- `04-product.png` (2:3 제품/배치 플랫레이) / `05-scene.png` (4:3 결과 장면) / `06-ambient.png` (1:1 분위기 인테리어) / `07-closing.png` (3:4 무드 클로징)
 
 ## 4. 품질 검증 (STEP 4)
 훅이 자동 실행하지만, 경고가 나오면 본문을 수정하고 재검사.
@@ -97,6 +97,6 @@ set -a && . ./.env && set +a && node scripts/generate-images.js \
 ## 완료 후 사용자에게 보고할 것
 - 제목 / 글자수 / 패턴 / 톤 변주 조합
 - 품질검사 결과, 유사도 검사 결과
-- 이미지 7장 생성 여부 (디자인 4장 + 상황 이미지 3장)
+- 이미지 7장 생성 여부 (모두 사진 전용, 텍스트 없음)
 - 발행 전 사람이 확인해야 할 항목 (수치·레퍼런스)
 - 다음 단계: `/blog-preview <폴더>` 로 발행 어시스턴트 실행

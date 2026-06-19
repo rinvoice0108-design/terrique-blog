@@ -55,8 +55,9 @@ const PHOTO_STYLE = [
   'warm soft natural lighting, shallow depth of field',
   'Korean lifestyle magazine editorial photography',
   'clean minimal background, warm neutral tones',
-  'NO faces shown directly, NO text overlays, NO logos, NO watermarks',
+  'NO faces shown directly, absolutely NO text of any kind, NO words, NO letters, NO numbers, NO typography, NO overlays, NO logos, NO watermarks, NO captions, NO labels',
   'ultra photorealistic, full-frame camera quality',
+  'pure photography only — zero graphic design elements, zero text, zero writing of any kind',
 ].join('. ');
 
 const DESIGN_STYLE = [
@@ -112,14 +113,14 @@ function buildContentPrompts({ title, keyword, subject, points, quote }) {
       ].join('\n'),
     },
     {
-      name: '04-tips',
+      name: '04-product',
       prompt: [
-        `Create a 2:3 vertical Korean editorial infographic.`,
-        `Title: "${keyword} 핵심 정리"`,
-        `Render the following points as a clean vertical numbered card layout (each in a rounded card with a warm-orange left accent bar):`,
-        (points.length ? points.slice(0, 5) : [ctx]).map((p, i) => `${i + 1}. ${p}`).join('\n'),
-        DESIGN_STYLE,
-        `Pure information design, no photos, no illustrations. Aspect ratio: 2:3 vertical.`,
+        `Create a 2:3 vertical product arrangement lifestyle photography image.`,
+        `Article topic: "${ctx}". Showcase: "${mainPoint}".`,
+        `Scene: An elegant flat-lay or product arrangement directly related to "${ctx}". Items beautifully organized on a neutral linen or marble surface, showing quality and attention to detail. Overhead or slight angle view. Soft even lighting.`,
+        `Ultra clean and premium feel. No people. No props that distract.`,
+        PHOTO_STYLE,
+        `Aspect ratio: 2:3 vertical. Pure product photography, absolutely no text.`,
       ].join('\n'),
     },
     {
@@ -134,14 +135,14 @@ function buildContentPrompts({ title, keyword, subject, points, quote }) {
       ].join('\n'),
     },
     {
-      name: '06-highlight',
+      name: '06-ambient',
       prompt: [
-        `Create a 1:1 square Korean editorial highlight card.`,
-        `Display this key message in large bold Korean sans-serif (must be perfectly legible): "${keyQuote}"`,
-        `Small category label at top: "${keyword}"`,
-        `Style: clean typographic card, oversized faint quotation marks as background accent, strong headline typography.`,
-        DESIGN_STYLE,
-        `No photographic elements — pure typography. Aspect ratio: 1:1 square.`,
+        `Create a 1:1 square ambient lifestyle interior photography image.`,
+        `Article topic: "${ctx}". Atmosphere: premium, warm, serene.`,
+        `Scene: A beautifully styled interior vignette that evokes the feeling of "${ctx}" — a sunlit bathroom shelf, a softly lit bedroom corner, or a cozy linen closet. Atmospheric and aspirational. No people.`,
+        `Warm diffused window light, muted neutral tones. Everything is perfectly ordered and aspirational.`,
+        PHOTO_STYLE,
+        `Aspect ratio: 1:1 square. Pure atmospheric photograph, absolutely no text.`,
       ].join('\n'),
     },
     {

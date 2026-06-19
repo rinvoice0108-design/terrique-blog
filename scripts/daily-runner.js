@@ -1,6 +1,6 @@
 // scripts/daily-runner.js
 // 매일 자동 실행: Google Sheets → 미사용 키워드 2개 선택 → /blog-new → 날짜 기록 → Gmail 발송
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -63,6 +63,54 @@ function getOutputFolderSet() {
       })
     );
   } catch { return new Set(); }
+}
+
+function generateImagesForFolder(folderName, env) {
+  const folder = join(ROOT, 'output', folderName);
+  const metaPath = join(folder, 'metadata.json');
+  const imagesDir = join(folder, 'images');
+
+  const existingCount = existsSync(imagesDir)
+    ? readdirSync(imagesDir).filter(f => /\.(png|jpg|jpeg|gif)$/i.test(f)).length
+    : 0;
+
+  if (existingCount >= 7) {
+    console.log(`[runner] 이미지 이미 있음 (${existingCount}장): ${folderName}`);
+    return;
+  }
+
+  if (!existsSync(metaPath)) {
+    console.warn(`[runner] metadata.json 없음, 이미지 생성 건너뜀: ${folderName}`);
+    return;
+  }
+
+  let meta = {};
+  try { meta = JSON.parse(readFileSync(metaPath, 'utf8')); } catch {}
+
+  if (!meta.title || !meta.keyword) {
+    console.warn(`[runner] metadata에 title/keyword 없음, 이미지 생성 건너뜀: ${folderName}`);
+    return;
+  }
+
+  console.log(`[runner] 이미지 생성 시작 (${existingCount}/7): ${folderName}`);
+  const args = [
+    'scripts/generate-images.js',
+    '--title', meta.title,
+    '--keyword', meta.keyword,
+    '--output', `output/${folderName}/images`,
+  ];
+  if (meta.image_points)  args.push('--points', meta.image_points);
+  if (meta.image_quote)   args.push('--quote', meta.image_quote);
+  if (meta.image_subject) args.push('--subject', meta.image_subject);
+
+  try {
+    execFileSync(process.execPath, args, {
+      cwd: ROOT, timeout: 300_000, stdio: 'inherit', env
+    });
+    console.log(`[runner] ✓ 이미지 생성 완료: ${folderName}`);
+  } catch (e) {
+    console.error(`[runner] ✗ 이미지 생성 실패: ${folderName} — ${e.message}`);
+  }
 }
 
 function buildPostDataFromDir(folderName) {
@@ -176,6 +224,11 @@ async function main() {
   if (newFolders.length === 0) {
     console.error('[runner] 새 포스트 폴더를 찾지 못했습니다.');
     process.exit(1);
+  }
+
+  // 모든 새 폴더에 이미지 7장이 있는지 확인 후 없으면 직접 생성
+  for (const folderName of newFolders) {
+    generateImagesForFolder(folderName, env);
   }
 
   const postData = newFolders.map(buildPostDataFromDir);
