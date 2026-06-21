@@ -39,6 +39,20 @@ const stripHtmlAndMd = (s) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+// 텍스트에서 도입부(첫 단락) 추출
+function extractIntro(text, chars = 300) {
+  const clean = stripHtmlAndMd(text);
+  return clean.slice(0, chars);
+}
+
+// 텍스트를 단락(섹션)으로 분리
+function splitSections(raw) {
+  // H2 헤딩 기준으로 섹션 분리, 없으면 빈 줄 기준
+  const byH2 = raw.split(/\n(?=##\s)/);
+  if (byH2.length > 1) return byH2.map((s) => ({ label: s.slice(0, 30).trim(), text: stripHtmlAndMd(s) }));
+  return raw.split(/\n\n+/).filter((s) => s.trim().length > 80).map((s) => ({ label: s.slice(0, 30).trim(), text: stripHtmlAndMd(s) }));
+}
+
 function shingles(text, n = 6) {
   // 한국어: 공백 제거 후 n-글자 단위 셰이글
   const s = text.replace(/\s+/g, '');
@@ -49,12 +63,34 @@ function shingles(text, n = 6) {
   return set;
 }
 
+// n=4 셰이글 (짧은 구문 중복 감지용)
+function shingles4(text) {
+  return shingles(text, 4);
+}
+
 function jaccard(a, b) {
   if (!a.size || !b.size) return 0;
   let inter = 0;
   for (const x of a) if (b.has(x)) inter++;
   const union = a.size + b.size - inter;
   return (inter / union) * 100;
+}
+
+// 가장 유사한 섹션 쌍 찾기
+function findMostSimilarSection(targetSections, otherSections) {
+  let maxSim = 0;
+  let label = '';
+  for (const ts of targetSections) {
+    const tsShingles = shingles(ts.text);
+    for (const os of otherSections) {
+      const sim = jaccard(tsShingles, shingles(os.text));
+      if (sim > maxSim) {
+        maxSim = sim;
+        label = `"${ts.label}…" vs "${os.label}…"`;
+      }
+    }
+  }
+  return { maxSim, label };
 }
 
 async function findPosts(root) {
@@ -90,7 +126,11 @@ async function main() {
   const target = resolve(args.file);
 
   const raw = await readFile(target, 'utf8');
-  const targetShingles = shingles(stripHtmlAndMd(raw));
+  const targetText = stripHtmlAndMd(raw);
+  const targetShingles6 = shingles(targetText);
+  const targetShingles4 = shingles4(targetText);
+  const targetIntro = extractIntro(raw);
+  const targetSections = splitSections(raw);
 
   const allPosts = await findPosts('output');
   const others = allPosts.filter((p) => resolve(p) !== target);
@@ -106,23 +146,41 @@ async function main() {
   const results = [];
   for (const other of others) {
     const otherRaw = await readFile(other, 'utf8');
-    const otherShingles = shingles(stripHtmlAndMd(otherRaw));
-    const sim = jaccard(targetShingles, otherShingles);
-    results.push({ file: other, similarity: sim });
+    const otherText = stripHtmlAndMd(otherRaw);
+    const otherShingles6 = shingles(otherText);
+    const otherShingles4 = shingles4(otherText);
+
+    // 전체 유사도 (6-gram)
+    const sim6 = jaccard(targetShingles6, otherShingles6);
+    // 도입부 유사도 (4-gram, 더 민감하게)
+    const introSim = jaccard(shingles4(targetIntro), shingles4(extractIntro(otherRaw)));
+    // 섹션 레벨 분석
+    const { maxSim: sectionMaxSim, label: sectionLabel } = findMostSimilarSection(
+      targetSections,
+      splitSections(otherRaw)
+    );
+
+    results.push({ file: other, sim6, introSim, sectionMaxSim, sectionLabel });
   }
-  results.sort((a, b) => b.similarity - a.similarity);
+  results.sort((a, b) => b.sim6 - a.sim6);
 
   let warnings = 0;
   for (const r of results) {
-    const mark = r.similarity >= threshold ? '⚠️  WARN' : '✅ OK  ';
+    const overallWarn = r.sim6 >= threshold;
+    const introWarn = r.introSim >= 40; // 도입부는 더 엄격 (40%)
+    const sectionWarn = r.sectionMaxSim >= threshold + 10; // 섹션 단위는 더 엄격
+    const warn = overallWarn || introWarn || sectionWarn;
+    const mark = warn ? '⚠️  WARN' : '✅ OK  ';
+    const introFlag = introWarn ? ` [도입부 ${r.introSim.toFixed(0)}%↑]` : '';
+    const sectionFlag = sectionWarn ? ` [섹션: ${r.sectionLabel} ${r.sectionMaxSim.toFixed(0)}%]` : '';
     console.log(
-      `  ${mark}  ${r.similarity.toFixed(1).padStart(5)}%  ${r.file}`
+      `  ${mark}  전체 ${r.sim6.toFixed(1).padStart(5)}%${introFlag}${sectionFlag}  ${r.file}`
     );
-    if (r.similarity >= threshold) warnings++;
+    if (warn) warnings++;
   }
 
   console.log(
-    `\n결과: ${warnings === 0 ? '중복 위험 없음' : `${warnings}건 경고 — 유사 문장 수정 권장`}\n`
+    `\n결과: ${warnings === 0 ? '중복 위험 없음' : `${warnings}건 경고 — 유사 구간 수정 권장`}\n`
   );
 }
 

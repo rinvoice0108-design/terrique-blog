@@ -8,15 +8,18 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { basename, dirname } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 
 function readStdin() {
   return new Promise((resolve) => {
     let data = '';
+    process.stdin.setEncoding('utf8');
     process.stdin.on('data', (c) => (data += c));
     process.stdin.on('end', () => resolve(data));
-    // 2초 후 타임아웃
-    setTimeout(() => resolve(data), 2000);
+    process.stdin.on('error', () => resolve(data));
+    // stdin이 이미 닫혀 있으면 즉시 resolve
+    if (process.stdin.readableEnded) resolve(data);
   });
 }
 
@@ -35,6 +38,14 @@ function extractPath(payload) {
 }
 
 function extractKeyword(filePath) {
+  // metadata.json 우선, 없으면 폴더명에서 파싱
+  try {
+    const metaPath = join(dirname(filePath), 'metadata.json');
+    const meta = JSON.parse(readFileSync(metaPath, 'utf8'));
+    if (meta.keyword) return meta.keyword;
+  } catch {
+    // metadata.json 없거나 파싱 실패 → 폴더명 fallback
+  }
   // output/2026-04-08_상세페이지AI/post.md → 상세페이지AI
   const folder = basename(dirname(filePath));
   return folder.replace(/^\d{4}-\d{2}-\d{2}_/, '');
