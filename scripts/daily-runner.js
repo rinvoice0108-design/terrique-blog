@@ -41,7 +41,7 @@ function runBlogNew(keyword) {
   try {
     execSync(
       `claude --print --dangerously-skip-permissions "/blog-new \\"${keyword}\\""`,
-      { cwd: ROOT, timeout: 600_000, stdio: 'inherit' }
+      { cwd: ROOT, timeout: 1_800_000, stdio: 'inherit' }
     );
     console.log(`[runner] ✓ 완료: "${keyword}"`);
     return true;
@@ -204,26 +204,41 @@ async function main() {
     if (runBlogNew(row.keyword)) succeeded.push(row);
   }
 
-  if (succeeded.length === 0) {
-    console.error('[runner] 포스트 생성 전부 실패.');
-    process.exit(1);
-  }
-
-  // Google Sheets B열에 사용일 기록
-  const today = todayKST();
-  for (const row of succeeded) {
-    const ok = await markKeywordUsed(env.SHEETS_ID, row.rowIndex, today);
-    if (ok) console.log(`[runner] 시트 기록: "${row.keyword}" → ${today}`);
-  }
-
-  // 실행 후 새로 생긴 폴더 감지
+  // 실행 후 새로 생긴 폴더 감지 — execSync가 타임아웃으로 죽어도
+  // /blog-new 자체는 이미 post.md/metadata.json을 디스크에 써놓은 경우가 있으므로
+  // 프로세스 종료 상태가 아니라 실제 생성된 폴더로 성공 여부를 판단한다.
   const afterFolders = getOutputFolderSet();
   const newFolders = [...afterFolders].filter(f => !beforeFolders.has(f));
   console.log(`[runner] 새 폴더 감지: ${newFolders.join(', ')}`);
 
   if (newFolders.length === 0) {
-    console.error('[runner] 새 포스트 폴더를 찾지 못했습니다.');
+    console.error('[runner] 포스트 생성 전부 실패 — 새로 생성된 폴더 없음.');
     process.exit(1);
+  }
+
+  if (succeeded.length === 0) {
+    console.warn('[runner] claude 프로세스는 타임아웃/에러로 종료됐지만, 디스크에 새 폴더가 확인되어 계속 진행합니다.');
+  }
+
+  // Google Sheets B열에 사용일 기록 — execSync 성공 판정 + 실제 폴더가 생성된 키워드 모두 포함
+  const newFolderKeywords = new Set(
+    newFolders
+      .map(f => {
+        try {
+          const meta = JSON.parse(readFileSync(join(ROOT, 'output', f, 'metadata.json'), 'utf8'));
+          return meta.keyword;
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean)
+  );
+  const rowsToMark = picked.filter(row => succeeded.includes(row) || newFolderKeywords.has(row.keyword));
+
+  const today = todayKST();
+  for (const row of rowsToMark) {
+    const ok = await markKeywordUsed(env.SHEETS_ID, row.rowIndex, today);
+    if (ok) console.log(`[runner] 시트 기록: "${row.keyword}" → ${today}`);
   }
 
   // 모든 새 폴더에 이미지 7장이 있는지 확인 후 없으면 직접 생성

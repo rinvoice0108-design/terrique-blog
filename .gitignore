@@ -35,5 +35,8 @@ Thumbs.db
 .idea/
 *.swp
 
+# Claude Code 로컬 권한 설정 (기기별로 다름, 다른 프로젝트 경로가 섞여있을 수 있음)
+.claude/settings.local.json
+
 # 자동화
 logs/
