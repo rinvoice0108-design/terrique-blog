@@ -15,6 +15,7 @@
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 // ────────────────────────────────────────────────
@@ -223,10 +224,15 @@ async function main() {
   const errors = [];
 
   for (const job of jobs) {
+    const path = join(output, `${job.name}.png`);
+    if (existsSync(path)) {
+      console.log(`[generate] ${job.name} 이미 존재, 건너뜀`);
+      okCount++;
+      continue;
+    }
     try {
       console.log(`[generate] ${job.name} ...`);
       const buf = await generateOne(job.prompt);
-      const path = join(output, `${job.name}.png`);
       await writeFile(path, buf);
       console.log(`  ✓ ${path} (${buf.length} bytes)`);
       okCount++;
