@@ -21,11 +21,12 @@ argument-hint: <폴더명>
 - 키워드에 "병원·시술·필러·보톡스·피부·성형·치과·한의원·의원·성과·효과" 등이 있으면
 - `medical-law-checker` 서브에이전트 호출 권장
 
-## 4. 이미지 4장 존재 확인
-- `images/thumbnail.png`
-- `images/infographic.png`
-- `images/quote-card.png`
-- `images/process.png`
+## 4. 이미지 5장 존재 확인
+- `images/01-hero.*`
+- `images/03-detail.*`
+- `images/04-product.*`
+- `images/05-scene.*`
+- `images/07-closing.*`
 - 파일 크기가 10KB 미만이면 생성 실패 가능성 → REVIEW
 
 ## 5. 외부 링크 0건

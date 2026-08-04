@@ -233,18 +233,19 @@ function renderPreviewHtml({ folder, title, meta, sections, images }) {
     .topbar .brand { font-size: 11px; opacity: 0.7; letter-spacing: 0.15em; flex-shrink: 0; }
 
     /* ───── Layout ───── */
+    /* 예전엔 본문(col-main)과 메타데이터(col-side, 고정 360px)를 항상 나란히
+       두는 2단 그리드였다. 창 폭이 얼마든 사이드바가 360px+gap을 그대로 떼어가니
+       본문이 늘 눌렸다(1400px 이하로 접는 미디어쿼리를 넣어봤지만 체감 개선이
+       없었다 — 실사용 창 폭 자체가 애매하게 걸쳐 있었던 것으로 보임). 폭 계산에
+       기대지 않도록 아예 항상 1단으로 고정하고, 본문이 먼저 나오게 한다 — 읽으러
+       들어왔는데 메타데이터/이미지 갤러리부터 스크롤하게 만들지 않기 위함. */
     main {
-      max-width: 1320px;
+      max-width: 900px;
       margin: 0 auto;
       padding: 24px;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 340px;
+      display: flex;
+      flex-direction: column;
       gap: 24px;
-      align-items: start;
-    }
-    @media (max-width: 1100px) {
-      main { grid-template-columns: minmax(0, 1fr); }
-      .col-side { order: -1; }
     }
     @media (max-width: 600px) {
       main { padding: 16px; gap: 16px; }
@@ -382,25 +383,26 @@ function renderPreviewHtml({ folder, title, meta, sections, images }) {
 
     /* ───── Section body ───── */
     .section-body {
-      padding: 24px;
-      font-size: 15px;
+      padding: 28px;
+      font-size: 17px;
+      line-height: 1.9;
     }
     .section-body > * { max-width: 100%; }
     .section-body h1 {
-      font-size: 22px;
-      margin-bottom: 14px;
+      font-size: 26px;
+      margin-bottom: 16px;
       line-height: 1.4;
     }
     .section-body h2 {
-      font-size: 18px;
-      margin: 22px 0 12px;
+      font-size: 21px;
+      margin: 26px 0 14px;
       color: var(--fg);
       text-transform: none;
       letter-spacing: 0;
       line-height: 1.4;
     }
     .section-body p {
-      margin-bottom: 14px;
+      margin-bottom: 16px;
     }
     .section-body strong, .section-body b {
       font-weight: 700;
@@ -584,7 +586,7 @@ function renderPreviewHtml({ folder, title, meta, sections, images }) {
 
       <div class="card">
         <h2>🖼 이미지 ${images.length}장</h2>
-        <button class="download-all" onclick="downloadAll()">⬇ 4장 일괄 다운로드</button>
+        <button class="download-all" onclick="downloadAll()">⬇ ${images.length}장 일괄 다운로드</button>
         ${imagesHtml}
       </div>
 
@@ -594,7 +596,7 @@ function renderPreviewHtml({ folder, title, meta, sections, images }) {
         <label><input type="checkbox"><span>카테고리 선택</span></label>
         <label><input type="checkbox"><span>본문 단락 복사·붙여넣기 (위에서부터 순서대로)</span></label>
         <label><input type="checkbox"><span>표는 스마트에디터에서 직접 생성</span></label>
-        <label><input type="checkbox"><span>이미지 4장 본문에 업로드</span></label>
+        <label><input type="checkbox"><span>이미지 ${images.length}장 본문에 업로드</span></label>
         <label><input type="checkbox"><span>썸네일 = 대표 이미지로 등록</span></label>
         <label><input type="checkbox"><span>태그 10개 입력</span></label>
         <label><input type="checkbox"><span>맞춤법 검사</span></label>
@@ -819,7 +821,7 @@ async function main() {
   console.log(`\n💡 사용법:`);
   console.log(`   1. 메타데이터 카드에서 제목·태그 복사 → 스마트에디터에 입력`);
   console.log(`   2. 본문 섹션을 위에서부터 순서대로 "서식 포함 복사" → 붙여넣기`);
-  console.log(`   3. 이미지 4장 일괄 다운로드 → 본문에 업로드`);
+  console.log(`   3. 이미지 ${images.length}장 일괄 다운로드 → 본문에 업로드`);
   console.log(`   4. 체크리스트 따라가며 발행`);
 }
 

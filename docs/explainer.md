@@ -44,14 +44,15 @@
 
 ### 4. 자동 검증 (PostToolUse 훅)
 글 저장 → `.claude/settings.json` 훅 → `hook-post-write.js`:
-- `quality-check.js` (7항목 결정론 채점)
-- `duplicate-check.js` (6-gram Jaccard)
+- `quality-check.js` (금칙어·제목·이미지 메타 등 하드 게이트 항목은 exit 2, 나머지는 WARN)
+- `duplicate-check.js` (6-gram jaccard + containment + 제목 축 + 12어절 연속일치, 하나라도 걸리면 exit 2)
+- 둘 중 하나라도 exit 2면 훅도 exit 2 — 단, 같은 글에 3회 연속 실패하면 무한루프 방지로 자동 통과 전환
 - 의료/뷰티 키워드면 `medical-law-checker` 추가 호출
 
 ### 5. 이미지 생성
-- `generate-images.js` → Nano Banana Pro REST 호출
-- 4종: 썸네일(16:9) / 인포그래픽(2:3) / 인용 카드(1:1) / 프로세스(4:3)
-- 브랜드 시스템(컬러/이름)은 `.env` 기반
+- `generate-images.js` → Nano Banana Pro REST 호출, `--subject`/`--points` 필수(비면 즉시 실패)
+- 5종: 히어로(16:9) / 디테일(1:1) / 제품(2:3) / 장면(4:3) / 클로징(3:4) — 전부 텍스트 없는 순수 사진, `knowledge/image-axes.json`으로 앵글·조명·배경 로테이션
+- `assets/product-master.jpg` 있으면 5장 전부에 참조 이미지로 첨부(제품 일관성)
 
 ### 6. 발행 어시스턴트
 - `preview.js` → self-contained HTML → 브라우저 자동 오픈

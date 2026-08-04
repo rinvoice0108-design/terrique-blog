@@ -7,10 +7,21 @@ service-account.json
 .env.local
 .env.*.local
 
+# 회사 전략·조사 문서 (이 저장소는 공개다 — 기본 차단 후 일반 문서만 화이트리스트)
+# 경쟁사 조사, 내부 비용 산정, 사업 전략 문서가 docs/ 에 섞여 들어온다.
+docs/*
+!docs/build-history.md
+!docs/explainer.md
+!docs/how-it-works.md
+!docs/setup-guide.md
+!docs/troubleshooting.md
+
 # 회사 데이터 (Single Source of Truth — 절대 git에 올리지 않음)
 knowledge/brand-facts.md
 knowledge/conversion-benchmarks.md
 knowledge/banned-words.json
+knowledge/facts.json
+knowledge/topic-fingerprints.json
 knowledge/tone-samples/*.txt
 knowledge/tone-samples/*.md
 !knowledge/tone-samples/README.md

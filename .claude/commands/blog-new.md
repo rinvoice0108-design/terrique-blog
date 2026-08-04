@@ -12,10 +12,11 @@ CLAUDE.md의 실행 파이프라인에 따라 아래 순서를 **반드시 전�
 ## 0. 사전 로드 (생략 금지)
 다음 파일을 먼저 Read로 읽습니다:
 1. `knowledge/brand-facts.md` — 회사 수치·인증·자사 제품 정보 (Single Source of Truth)
-2. `knowledge/tone-samples/real-blog-posts.txt` — 실제 회사 블로그 문체 (있을 경우)
-3. `knowledge/patterns/writing-playbook.txt` — 글쓰기 패턴 가이드 (있을 경우)
-4. `knowledge/banned-words.json` — 금칙어 (도메인 단어 포함)
-5. `output/_index.json` — 최근 사용한 패턴/도입부 확인 (있을 경우 — 의도적으로 다른 조합 선택)
+2. `knowledge/facts.json` — 제품·업계·규제 관련 검증된 사실 (grade별 확실/공식/학술/업계관행/자사/미검증)
+3. `knowledge/tone-samples/real-blog-posts.txt` — 실제 회사 블로그 문체 (있을 경우)
+4. `knowledge/patterns/writing-playbook.txt` — 글쓰기 패턴 가이드 (있을 경우)
+5. `knowledge/banned-words.json` — 금칙어 (도메인 단어 포함)
+6. `output/_index.json` — 최근 사용한 패턴/도입부 확인 (있을 경우 — 의도적으로 다른 조합 선택)
 
 ## 1. 키워드 리서치 (STEP 1)
 ```bash
@@ -51,27 +52,27 @@ API 인증 실패 시 웹 검색 기반으로 대체 리서치.
   "pattern": "<사용한 패턴명>",
   "intro_type": "<도입부 유형>",
   "created_at": "<YYYY-MM-DD>",
-  "image_points": "<핵심 포인트 3개 |||로 구분 예: 흡수력 우수|||부드러운 촉감|||오래 사용 가능>",
-  "image_quote": "<글에서 가장 임팩트 있는 문구 1줄>",
-  "image_steps": "<단계 3개 |||로 구분 예: 올바른 세탁|||완전 건조|||보관법>",
-  "image_subject": "<이미지 생성용 핵심 주제 한 줄>"
+  "image_subject": "<이미지 생성용 핵심 주제 한 줄 — 키워드를 그대로 반복하지 말고 구체적인 장면으로. 예: '면 수건을 올바른 주기로 세탁하고 관리하는 일상 장면' (X: '수건 세탁 주기')>",
+  "image_points": ["<구체적 장면/포인트 1>", "<구체적 장면/포인트 2>", "<구체적 장면/포인트 3>"]
 }
 ```
+`image_subject`와 `image_points`(최소 2개)는 **필수**입니다 — 비어 있으면 `scripts/generate-images.js`가 즉시 에러로 종료합니다. 키워드를 그대로 복붙하지 말고, 글의 실제 장면·포인트를 구체적으로 채우세요.
 
 ## 3. 이미지 생성 (STEP 3)
-콘텐츠 작성이 끝난 뒤, 글의 핵심 주제를 한 줄로 요약한 `--subject` 값을 준비하세요 (예: "호텔급 면 수건의 품질 차이와 선택 기준").
+콘텐츠 작성이 끝난 뒤, `metadata.json`의 `image_subject`/`image_points`를 그대로 인자로 넘기세요.
 
 ```bash
 set -a && . ./.env && set +a && node scripts/generate-images.js \
   --title "..." --keyword "$ARGUMENTS" \
-  --points "..." --quote "..." --steps "..." \
-  --subject "글 핵심 주제 한 줄 요약" \
+  --subject "<image_subject 값>" \
+  --points "<image_points를 |||로 이어붙인 값>" \
   --output "output/<폴더>/images"
 ```
 
-총 7장 생성 (모두 사진 전용 — 텍스트/타이포그래피 이미지 없음):
-- `01-hero.png` (16:9 히어로 사진) / `02-opening.png` (4:3 상황 오프닝) / `03-detail.png` (1:1 텍스처 클로즈업)
-- `04-product.png` (2:3 제품/배치 플랫레이) / `05-scene.png` (4:3 결과 장면) / `06-ambient.png` (1:1 분위기 인테리어) / `07-closing.png` (3:4 무드 클로징)
+총 5장 생성 (모두 사진 전용 — 텍스트/타이포그래피 이미지 없음, 앵글·조명·배경을 글마다 자동으로 다르게 조합):
+- `01-hero` (16:9 히어로 사진) / `03-detail` (1:1 텍스처 클로즈업) / `04-product` (2:3 제품/배치 플랫레이) / `05-scene` (4:3 결과 장면) / `07-closing` (3:4 무드 클로징)
+
+`assets/product-master.jpg`가 있으면 5장 전부에 참조 이미지로 자동 첨부돼 제품 일관성이 유지됩니다(없어도 동작함).
 
 ## 4. 품질 검증 (STEP 4)
 훅이 자동 실행하지만, 경고가 나오면 본문을 수정하고 재검사.
@@ -108,6 +109,6 @@ set -a && . ./.env && set +a && node scripts/generate-images.js \
 ## 완료 후 사용자에게 보고할 것
 - 제목 / 글자수 / 패턴 / 톤 변주 조합
 - 품질검사 결과, 유사도 검사 결과
-- 이미지 7장 생성 여부 (모두 사진 전용, 텍스트 없음)
+- 이미지 5장 생성 여부 (모두 사진 전용, 텍스트 없음)
 - 발행 전 사람이 확인해야 할 항목 (수치·레퍼런스)
 - 다음 단계: `/blog-preview <폴더>` 로 발행 어시스턴트 실행

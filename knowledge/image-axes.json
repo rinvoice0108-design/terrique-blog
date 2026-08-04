@@ -1,0 +1,34 @@
+{
+  "_comment": "이미지 생성 프롬프트에 매 글마다 다른 조합을 대입하기 위한 축. scripts/generate-images.js의 pickAxis()가 hash(date+keyword+jobName) 기반으로 결정론적 인덱스를 골라 사용한다. 항목을 늘리면 반복 주기가 늘어난다.",
+  "angle": [
+    "eye-level, straight-on",
+    "low-angle looking slightly up",
+    "high-angle 45 degrees looking down",
+    "overhead top-down flat-lay angle",
+    "three-quarter angle from the side"
+  ],
+  "light": [
+    "warm three-point softbox studio lighting",
+    "golden hour window light with long soft shadows",
+    "rim light and gentle backlight, subject edge glowing",
+    "overcast diffused daylight, even and soft",
+    "morning window light filtering through sheer curtains"
+  ],
+  "surface": [
+    "light oak wood surface",
+    "white linen bedding",
+    "sunlit bathroom shelf with tile backdrop",
+    "cozy bedroom corner with soft textiles",
+    "warm linen closet with folded stacks",
+    "matte ceramic tile bathroom counter",
+    "natural rattan basket and woven texture",
+    "pale marble countertop"
+  ],
+  "shot": [
+    "extreme macro close-up on texture",
+    "tight close-up, shallow depth of field",
+    "medium shot, subject fills half the frame",
+    "wide environmental shot with generous negative space",
+    "flat-lay composition viewed from directly above"
+  ]
+}

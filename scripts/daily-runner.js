@@ -4,7 +4,7 @@ import { execSync, execFileSync } from 'child_process';
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { fetchKeywordsWithStatus, markKeywordUsed, restoreServiceAccount } from './sheets-tracker.js';
+import { fetchKeywordsWithStatus, markKeywordUsed, restoreServiceAccount, findSimilarKeywords, logFingerprintWarning } from './sheets-tracker.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -28,11 +28,35 @@ function todayKST() {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
 }
 
-// ── 미사용 키워드 2개 선택 ────────────────────────────────────────
+// ── 미사용 키워드 n개 선택 (이미 쓴 주제와 유사한 건 걸러냄) ────────
 function pickUnused(allRows, n = 2) {
+  const used = allRows.filter(r => r.usedDate);
   const unused = allRows.filter(r => !r.usedDate);
   if (unused.length === 0) return { picked: [], reset: true };
-  return { picked: unused.slice(0, n), reset: false };
+
+  const picked = [];
+  const skipped = [];
+  for (const candidate of unused) {
+    if (picked.length >= n) break;
+    // 이미 발행된 키워드 + 오늘 이미 고른 키워드 둘 다와 비교
+    const similar = findSimilarKeywords(candidate.keyword, [...used, ...picked]);
+    if (similar.length > 0) {
+      console.warn(`[runner] ⚠ "${candidate.keyword}" 건너뜀 — 유사 주제 이미 사용됨: ${similar.map(s => `"${s.keyword}"(${s.similarity}%)`).join(', ')}`);
+      logFingerprintWarning(candidate.keyword, similar);
+      skipped.push(candidate);
+      continue;
+    }
+    picked.push(candidate);
+  }
+
+  // 전부 유사도로 걸러져 픽이 0개면, 최소 1개는 진행해야 하니 건너뛴 것 중
+  // 가장 덜 유사했던 후보를 그대로 채택한다 (완전 중단보다 낫다).
+  if (picked.length === 0 && skipped.length > 0) {
+    console.warn('[runner] 모든 후보가 유사도로 걸러짐 — 그래도 진행을 위해 첫 후보를 그대로 사용');
+    picked.push(skipped[0]);
+  }
+
+  return { picked, reset: false };
 }
 
 // ── 블로그 생성 ──────────────────────────────────────────────────
@@ -71,10 +95,10 @@ function generateImagesForFolder(folderName, env) {
   const imagesDir = join(folder, 'images');
 
   const existingCount = existsSync(imagesDir)
-    ? readdirSync(imagesDir).filter(f => /\.(png|jpg|jpeg|gif)$/i.test(f)).length
+    ? readdirSync(imagesDir).filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f)).length
     : 0;
 
-  if (existingCount >= 7) {
+  if (existingCount >= 5) {
     console.log(`[runner] 이미지 이미 있음 (${existingCount}장): ${folderName}`);
     return;
   }
@@ -87,21 +111,29 @@ function generateImagesForFolder(folderName, env) {
   let meta = {};
   try { meta = JSON.parse(readFileSync(metaPath, 'utf8')); } catch {}
 
-  if (!meta.title || !meta.keyword) {
-    console.warn(`[runner] metadata에 title/keyword 없음, 이미지 생성 건너뜀: ${folderName}`);
+  const keyword = meta.keyword || meta.main_keyword;
+  if (!meta.title || !keyword) {
+    console.warn(`[runner] metadata에 title/keyword(또는 main_keyword) 없음, 이미지 생성 건너뜀: ${folderName}`);
     return;
   }
 
-  console.log(`[runner] 이미지 생성 시작 (${existingCount}/7): ${folderName}`);
+  const points = Array.isArray(meta.image_points)
+    ? meta.image_points.filter((p) => typeof p === 'string' && p.trim())
+    : [];
+  if (!meta.image_subject || points.length < 2) {
+    console.warn(`[runner] metadata에 image_subject/image_points(최소 2개) 없음, 이미지 생성 건너뜀: ${folderName}`);
+    return;
+  }
+
+  console.log(`[runner] 이미지 생성 시작 (${existingCount}/5): ${folderName}`);
   const args = [
     'scripts/generate-images.js',
     '--title', meta.title,
-    '--keyword', meta.keyword,
+    '--keyword', keyword,
+    '--subject', meta.image_subject,
+    '--points', points.join('|||'),
     '--output', `output/${folderName}/images`,
   ];
-  if (meta.image_points)  args.push('--points', meta.image_points);
-  if (meta.image_quote)   args.push('--quote', meta.image_quote);
-  if (meta.image_subject) args.push('--subject', meta.image_subject);
 
   try {
     execFileSync(process.execPath, args, {
@@ -117,6 +149,7 @@ function buildPostDataFromDir(folderName) {
   const folder = join(ROOT, 'output', folderName);
   const mdPath = join(folder, 'post.md');
   const metaPath = join(folder, 'metadata.json');
+  const qualityReportPath = join(folder, 'quality-report.json');
   const previewPath = join(folder, 'preview.html');
   const imagesDir = join(folder, 'images');
   const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
@@ -143,12 +176,19 @@ function buildPostDataFromDir(folderName) {
     try { metadata = JSON.parse(readFileSync(metaPath, 'utf8')); } catch {}
   }
 
+  let qualityReport = null;
+  if (existsSync(qualityReportPath)) {
+    try { qualityReport = JSON.parse(readFileSync(qualityReportPath, 'utf8')); } catch {}
+  }
+
   const images = [];
   if (existsSync(imagesDir)) {
     readdirSync(imagesDir)
-      .filter(f => /\.(png|jpg|jpeg|gif)$/i.test(f))
+      .filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f))
       .forEach(f => images.push({ filename: f, path: join(imagesDir, f) }));
   }
+  // 대표 이미지(01-hero) — 메일 본문 인라인용, cid로 참조
+  const heroImage = images.find(img => img.filename.startsWith('01-hero')) || images[0] || null;
 
   console.log(`[runner]   fullContent 길이: ${fullContent.length}, 이미지: ${images.length}장`);
 
@@ -160,6 +200,8 @@ function buildPostDataFromDir(folderName) {
     fullContent,
     metadata,
     images,
+    heroImage,
+    qualityReport,
     isCI,
     previewPath: isCI ? null : `file:///${previewPath.replace(/\\/g, '/')}`
   };
@@ -226,7 +268,7 @@ async function main() {
       .map(f => {
         try {
           const meta = JSON.parse(readFileSync(join(ROOT, 'output', f, 'metadata.json'), 'utf8'));
-          return meta.keyword;
+          return meta.keyword || meta.main_keyword;
         } catch {
           return null;
         }
@@ -241,9 +283,21 @@ async function main() {
     if (ok) console.log(`[runner] 시트 기록: "${row.keyword}" → ${today}`);
   }
 
-  // 모든 새 폴더에 이미지 7장이 있는지 확인 후 없으면 직접 생성
+  // 모든 새 폴더에 이미지 5장이 있는지 확인 후 없으면 직접 생성
   for (const folderName of newFolders) {
     generateImagesForFolder(folderName, env);
+  }
+
+  // 메일 발송 전 preview.html을 미리 생성해둔다 — 안 만들어두면 메일 본문의
+  // previewPath 링크가 존재하지 않는 파일을 가리키게 된다.
+  for (const folderName of newFolders) {
+    try {
+      execFileSync(process.execPath, ['scripts/preview.js', '--folder', `output/${folderName}`, '--no-open'], {
+        cwd: ROOT, timeout: 60_000, stdio: 'inherit', env,
+      });
+    } catch (e) {
+      console.error(`[runner] ✗ preview.html 생성 실패: ${folderName} — ${e.message}`);
+    }
   }
 
   const postData = newFolders.map(buildPostDataFromDir);

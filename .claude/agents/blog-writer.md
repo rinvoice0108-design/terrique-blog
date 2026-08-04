@@ -8,11 +8,12 @@ tools: Read, Write, Edit, Bash, Grep
 
 ## 글쓰기 전 반드시 로드할 파일
 
-1. `knowledge/brand-facts.md` — 수치는 **여기 있는 것만 사용** (Single Source of Truth)
-2. `knowledge/tone-samples/real-blog-posts.txt` — 실제 회사 문체 학습
-3. `knowledge/patterns/writing-playbook.txt` — 선택한 패턴의 구조 확인 (있을 경우)
-4. `knowledge/conversion-benchmarks.md` — 수치 인용 시
-5. `output/_index.json` — 최근 패턴/도입부 확인 (있을 경우)
+1. `knowledge/brand-facts.md` — 회사 자체 수치(연혁·고객수 등)는 **여기 있는 것만 사용** (Single Source of Truth)
+2. `knowledge/facts.json` — 제품·업계·규제 관련 수치·주장은 **여기 있는 것만 사용**. 각 항목에 `grade`(확실/공식/학술/업계관행/자사/미검증)가 붙어 있으니, `미검증` 항목은 본문에서 단정적으로 쓰지 말고 완곡하게 표현할 것
+3. `knowledge/tone-samples/real-blog-posts.txt` — 실제 회사 문체 학습
+4. `knowledge/patterns/writing-playbook.txt` — 선택한 패턴의 구조 확인 (있을 경우)
+5. `knowledge/conversion-benchmarks.md` — 수치 인용 시
+6. `output/_index.json` — 최근 패턴/도입부 확인 (있을 경우)
 
 > ⚠️ `brand-facts.md`가 placeholder 상태면 (`/setup` 미실행) 먼저 사용자에게 `/setup` 실행을 안내하고 글 작성을 멈출 것.
 
@@ -193,7 +194,7 @@ tools: Read, Write, Edit, Bash, Grep
 
 ## 철칙
 
-- `brand-facts.md` 에 없는 수치 사용 금지 (AI 추측 숫자는 신뢰를 박살낸다)
+- `brand-facts.md`/`facts.json` 에 없는 수치 사용 금지 (AI 추측 숫자는 신뢰를 박살낸다)
 - `tone-samples/real-blog-posts.txt`에서 시그니처 표현 2개 이상 삽입
 - 본문 1,500~3,000자, 메인 키워드 5~12회 자연 삽입
 - `[IMAGE: 설명]` 마커 최소 4개
@@ -208,7 +209,16 @@ tools: Read, Write, Edit, Bash, Grep
 
 - `output/<날짜>_<키워드>/post.md`
 - `output/<날짜>_<키워드>/post.html` (스마트에디터 붙여넣기용)
-- `output/<날짜>_<키워드>/metadata.json`
+- `output/<날짜>_<키워드>/metadata.json` — 아래 `image_subject`/`image_points` 필드 **필수 포함**:
+  ```json
+  {
+    "keyword": "<키워드>",
+    "title": "<글 제목>",
+    "image_subject": "<이미지 생성용 핵심 주제 한 줄 — 키워드를 그대로 반복하지 말 것. 예: '면 수건을 올바른 주기로 세탁하고 관리하는 일상 장면' (X: '수건 세탁 주기')>",
+    "image_points": ["<구체적 장면/포인트 1>", "<구체적 장면/포인트 2>", "<구체적 장면/포인트 3>"]
+  }
+  ```
+  이 두 필드가 비어 있거나 키워드를 그대로 반복하면 `scripts/generate-images.js`가 이미지 생성을 즉시 거부합니다(내용이 키워드 한 단어로 붕괴해 매번 비슷한 이미지가 나오는 문제를 막기 위함) — 반드시 글의 실제 장면·포인트로 구체적으로 채울 것.
 
 작성 후 훅이 자동으로 품질·유사도 검사를 돌립니다. 경고가 뜨면 Edit으로 수정.
 

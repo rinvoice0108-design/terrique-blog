@@ -6,6 +6,12 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(__dirname, '..');
+const BANNED_WORDS_PATH = join(ROOT, 'knowledge', 'banned-words.json');
+const FACTS_PATH = join(ROOT, 'knowledge', 'facts.json');
 
 function parseArgs(argv) {
   const args = {};
@@ -37,21 +43,212 @@ const stripHtml = (s) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-const BANNED = [
-  '최고', '최저', '최상', '최강', '최대', '최소', '최초', '최신',
-  '무조건', '100%', '절대', '완벽', '완전', '압도적', '독보적',
-  '혁신적', '획기적', '놀라운', '경이로운', '전무후무', '유일무이',
-  '세계 최고', '국내 최초', '업계 1위', '검증된', '보장합니다',
-  '효과 보장', '무조건 성공', '절대 후회',
-];
-const CONJUNCTIONS = [
-  '또한', '그리고', '더불어', '아울러',
-  '그러나', '하지만', '반면에', '그럼에도',
-  '따라서', '그러므로', '결론적으로', '요약하면',
-  '게다가', '뿐만 아니라', '나아가', '더욱이',
-];
+// knowledge/banned-words.json을 실제 소스로 사용 (예전엔 이 파일과 별개인
+// 하드코딩 배열을 썼음 — 두 리스트가 어긋나던 문제 수정).
+let bannedWordsCache = null;
+async function loadBannedWords() {
+  if (bannedWordsCache) return bannedWordsCache;
+  const raw = await readFile(BANNED_WORDS_PATH, 'utf8');
+  const data = JSON.parse(raw);
+  const cat = data.categories || {};
+  bannedWordsCache = {
+    superlatives: cat.superlatives?.words || [],
+    domainSpecific: cat.domain_specific?.words || [],
+    aiCliches: cat.ai_cliches?.words || [],
+    conjunctions: cat.overused_conjunctions?.words || [],
+    conjunctionMaxRatio: cat.overused_conjunctions?.max_ratio_percent ?? 5,
+    exaggeratedPatterns: (cat.exaggerated_percent?.patterns || []).map((p) => new RegExp(p)),
+    exceptionPhrases: data.exceptions?.phrases || [],
+  };
+  return bannedWordsCache;
+}
 
-function check(text, raw, keyword) {
+// knowledge/facts.json — 본문의 숫자+단위 주장이 검증된 사실 목록에 있는지 대조.
+// 파일이 없으면(아직 /setup 안 함) 조용히 스킵 — 하드 요구사항 아님.
+let factsCache = null;
+async function loadFacts() {
+  if (factsCache) return factsCache;
+  try {
+    const raw = await readFile(FACTS_PATH, 'utf8');
+    const data = JSON.parse(raw);
+    factsCache = Array.isArray(data.facts) ? data.facts : [];
+  } catch {
+    factsCache = [];
+  }
+  return factsCache;
+}
+
+const FACT_NUMBER_UNIT_RE =
+  /\d+(?:[.,]\d+)?\s*(?:%|GSM|gsm|TPI|TPM|mg\/kg|kg|cm|mm|㎡|℃|도|수|배|년|회|장|색)/g;
+
+// 본문에서 숫자+단위 주장을 뽑아 facts.json에 근거가 있는지 대조 (WARN만 — 하드
+// 게이트는 오탐률을 지켜본 뒤 4순위 이후 검토).
+function checkFactClaims(text, facts) {
+  const results = [];
+  if (!facts.length) return results; // facts.json 미도입 상태면 검사 자체를 생략
+
+  // '미검증' 등급 fact는 "이 수치는 출처 불분명" 식으로 나쁜 예시 숫자를 인용문
+  // 안에 그대로 포함하는 경우가 있다(예: "유연제 흡수력 47% 감소 — 출처 불분명").
+  // 이런 항목까지 haystack에 넣으면 경고하려던 그 숫자가 오히려 "검증됨"으로
+  // 오판된다. 근거로 인정할 수 있는 등급만 매칭 대상에 포함.
+  const haystack = facts
+    .filter((f) => f.grade !== '미검증')
+    .map((f) => f.text)
+    .join(' ')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+
+  const claims = [...new Set((text.match(FACT_NUMBER_UNIT_RE) || []).map((m) => m.trim()))];
+  const unmatched = claims.filter((c) => !haystack.includes(c.replace(/\s+/g, '').toLowerCase()));
+
+  results.push({
+    name: '사실 근거(facts.json) 대조',
+    pass: unmatched.length === 0,
+    detail:
+      unmatched.length === 0
+        ? claims.length
+          ? `본문 수치 ${claims.length}개 모두 facts.json에서 근거 확인됨`
+          : '본문에 대조할 수치 주장 없음'
+        : `facts.json에 근거 없는 수치 주장: ${unmatched.join(', ')} — brand-facts.md/facts.json 확인 필요`,
+  });
+
+  return results;
+}
+
+// 부분문자열 오탐 방지 — '완전'이 '완전히'/'불완전'에 걸리는 것처럼, 부정 접두사
+// 뒤나 부사화 접미사 앞에 붙어 다른 단어가 된 경우는 제외.
+const NEGATION_PREFIXES = new Set(['불', '비']);
+const ADVERB_SUFFIXES = new Set(['히']);
+
+// banned-words.json의 exceptions.phrases — "면 100%"처럼 마케팅 과장이 아니라
+// 소재 표기 등 정당한 문맥인 구체적 구문. 매치 위치가 이 구간과 겹치면 무시.
+function findExceptionSpans(text, phrases) {
+  const spans = [];
+  for (const phrase of phrases) {
+    let idx = 0;
+    while (true) {
+      const found = text.indexOf(phrase, idx);
+      if (found === -1) break;
+      spans.push([found, found + phrase.length]);
+      idx = found + phrase.length;
+    }
+  }
+  return spans;
+}
+
+function overlapsAnySpan(pos, len, spans) {
+  return spans.some(([s, e]) => pos < e && pos + len > s);
+}
+
+function findBannedHits(text, words, exceptionSpans = []) {
+  const hits = [];
+  for (const w of words) {
+    let idx = 0;
+    let matched = false;
+    while (!matched) {
+      const found = text.indexOf(w, idx);
+      if (found === -1) break;
+      const before = text[found - 1];
+      const after = text[found + w.length];
+      const boundaryFalsePositive =
+        (before && NEGATION_PREFIXES.has(before)) || (after && ADVERB_SUFFIXES.has(after));
+      const exceptionFalsePositive = overlapsAnySpan(found, w.length, exceptionSpans);
+      if (!boundaryFalsePositive && !exceptionFalsePositive) {
+        matched = true;
+      } else {
+        idx = found + w.length;
+      }
+    }
+    if (matched) hits.push(w);
+  }
+  return hits;
+}
+
+function findExaggeratedMatches(text, patterns) {
+  const hits = [];
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m) hits.push(m[0]);
+  }
+  return hits;
+}
+
+// 종결어미 반복 판정 — 예전엔 "끝 3글자 완전일치"라 "좋습니다"(습니다)와
+// "말합니다"(합니다)를 다른 어미로 취급해 반복을 놓쳤다. 문체 카테고리로 먼저
+// 분류하고, 카테고리 안에서만 못 찾으면 리터럴 3글자로 폴백한다.
+// 더 구체적인 패턴을 먼저 두고, 마지막에 "니다"로 끝나는 모든 문장을 포괄하는
+// 일반 규칙을 둔다 — 한글은 자모가 아니라 완성형 음절이라 'ㅂ니다' 같은 부분
+// 자모 매치는 무의미하므로, 어미 전체 음절(습니다/합니다/됩니다/입니다 등)이
+// 공유하는 꼬리 "니다"로 통합해 판정한다.
+const ENDING_CATEGORIES = [
+  { label: '-것입니다/-것이다체', re: /것(입니다|이다)[.!?]?$/ },
+  { label: '-습니까(의문)', re: /습니까\??$/ },
+  { label: '-어요/-아요체', re: /(어요|아요|해요|예요|이에요|돼요)[.!?]?$/ },
+  { label: '-니다체(합니다/됩니다/습니다 등)', re: /니다[.!?]?$/ },
+];
+function classifyEnding(sentence) {
+  const s = sentence.trim();
+  for (const cat of ENDING_CATEGORIES) {
+    if (cat.re.test(s)) return cat.label;
+  }
+  return s.slice(-3);
+}
+
+// AI 티 문체 검사 (4순위) — 쉼표 포함 문장 비율(KatFishNet 근거: 인간 26.31% vs
+// LLM 61.03%), 번역투, 이중피동. AI 탐지기 점수 자체는 게이트로 쓰지 않고
+// 이 결정론적 패턴들만 WARN으로 사용한다.
+function checkAiStyle(text, sentences) {
+  const results = [];
+
+  const commaSentences = sentences.filter((s) => /[,，]/.test(s)).length;
+  const commaRatio = sentences.length ? (commaSentences / sentences.length) * 100 : 0;
+  results.push({
+    name: '쉼표 포함 문장 비율',
+    pass: commaRatio <= 35,
+    detail: `${commaSentences}/${sentences.length}문장 = ${commaRatio.toFixed(1)}% (임계값 35%, 근거: KatFishNet — 인간 26.31% vs LLM 61.03%)`,
+  });
+
+  const TRANSLATIONESE = [
+    { label: '~을 통해', re: /을\s?통해/g },
+    { label: '~를 통해', re: /를\s?통해/g },
+    { label: '~에 대한', re: /에\s?대한/g },
+    { label: '~에 대해', re: /에\s?대해/g },
+    { label: '~에 있어서', re: /에\s?있어서/g },
+    { label: '~의 경우', re: /의\s?경우/g },
+  ];
+  const translationeseHits = [];
+  for (const { label, re } of TRANSLATIONESE) {
+    const n = (text.match(re) || []).length;
+    if (n > 0) translationeseHits.push(`${label}×${n}`);
+  }
+  results.push({
+    name: '번역투 표현',
+    pass: translationeseHits.length === 0,
+    detail: translationeseHits.length === 0 ? '없음' : `발견(자연스러운 한국어로 변경 권장): ${translationeseHits.join(', ')}`,
+  });
+
+  const DOUBLE_PASSIVE = [
+    { label: '보여지다', re: /보여지/g },
+    { label: '되어지다', re: /되어지/g },
+    { label: '여겨지다', re: /여겨지/g },
+    { label: '쓰여지다', re: /쓰여지/g },
+    { label: '잊혀지다', re: /잊혀지/g },
+    { label: '놓여지다', re: /놓여지/g },
+  ];
+  const doublePassiveHits = [];
+  for (const { label, re } of DOUBLE_PASSIVE) {
+    if (re.test(text)) doublePassiveHits.push(label);
+  }
+  results.push({
+    name: '이중피동',
+    pass: doublePassiveHits.length === 0,
+    detail: doublePassiveHits.length === 0 ? '없음' : `발견(단일 피동으로 수정 권장): ${doublePassiveHits.join(', ')}`,
+  });
+
+  return results;
+}
+
+function check(text, raw, keyword, banned) {
   const results = [];
   const charCount = text.replace(/\s/g, '').length;
 
@@ -84,7 +281,7 @@ function check(text, raw, keyword) {
   let cur = 1;
   let prev = '';
   for (const s of sentences) {
-    const ending = s.trim().slice(-3);
+    const ending = classifyEnding(s);
     if (ending && ending === prev) {
       cur++;
       if (cur > maxRun) {
@@ -105,6 +302,9 @@ function check(text, raw, keyword) {
         : '연속 3회 이상 동일 어미 없음',
   });
 
+  // 3b. AI 티 문체 (4순위 — 쉼표 비율/번역투/이중피동, 전부 WARN)
+  results.push(...checkAiStyle(text, sentences));
+
   // 4. 이미지 마커
   const imgMarkers = (raw.match(/\[IMAGE:/g) || []).length;
   results.push({
@@ -124,17 +324,29 @@ function check(text, raw, keyword) {
         : `${links.length}개 발견 (저품질 트리거): ${links.slice(0, 3).join(', ')}`,
   });
 
-  // 6. 금칙어
-  const hits = BANNED.filter((w) => text.includes(w));
+  // 6. 금칙어 (하드 게이트 — 발견 시 exit 2)
+  const exceptionSpans = findExceptionSpans(text, banned.exceptionPhrases);
+  const bannedHits = findBannedHits(text, [...banned.superlatives, ...banned.domainSpecific], exceptionSpans);
+  const exaggeratedHits = findExaggeratedMatches(text, banned.exaggeratedPatterns);
+  const allBannedHits = [...bannedHits, ...exaggeratedHits];
   results.push({
     name: '최상급/금칙어',
-    pass: hits.length === 0,
-    detail: hits.length === 0 ? '없음' : `발견: ${hits.join(', ')}`,
+    pass: allBannedHits.length === 0,
+    hard: true,
+    detail: allBannedHits.length === 0 ? '없음' : `발견: ${allBannedHits.join(', ')}`,
+  });
+
+  // 6b. AI 클리셰 표현 (WARN만 — 엄격 판정은 4순위에서)
+  const aiClicheHits = findBannedHits(text, banned.aiCliches, exceptionSpans);
+  results.push({
+    name: 'AI 클리셰 표현',
+    pass: aiClicheHits.length === 0,
+    detail: aiClicheHits.length === 0 ? '없음' : `발견(최소화 권장): ${aiClicheHits.join(', ')}`,
   });
 
   // 7. 접속사 비율
-  const conjCount = CONJUNCTIONS.reduce(
-    (n, c) => n + (text.match(new RegExp(c, 'g')) || []).length,
+  const conjCount = banned.conjunctions.reduce(
+    (n, c) => n + (text.match(new RegExp(escapeRe(c), 'g')) || []).length,
     0
   );
   const conjRatio = sentences.length
@@ -142,8 +354,8 @@ function check(text, raw, keyword) {
     : 0;
   results.push({
     name: '접속사 비율',
-    pass: conjRatio <= 5,
-    detail: `${conjCount}회 / ${sentences.length}문장 = ${conjRatio.toFixed(1)}% (목표 ≤ 5%)`,
+    pass: conjRatio <= banned.conjunctionMaxRatio,
+    detail: `${conjCount}회 / ${sentences.length}문장 = ${conjRatio.toFixed(1)}% (목표 ≤ ${banned.conjunctionMaxRatio}%)`,
   });
 
   // 8. 구조 검사 (H2/H3 소제목 여부)
@@ -218,7 +430,7 @@ function checkTitle(raw, keyword) {
   const title = h1Match ? h1Match[1].trim() : null;
 
   if (!title) {
-    results.push({ name: '제목(H1)', pass: false, detail: 'H1 제목을 찾을 수 없음 — # 제목 형식으로 작성 필요' });
+    results.push({ name: '제목(H1)', pass: false, hard: true, detail: 'H1 제목을 찾을 수 없음 — # 제목 형식으로 작성 필요' });
     return results;
   }
 
@@ -267,6 +479,56 @@ function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// 이미지 프롬프트 붕괴 방지 — image_subject/image_points가 비었거나
+// 키워드를 그대로 반복하면 generate-images.js에서 내용이 키워드 한 단어로
+// 붕괴해 매번 비슷한 이미지가 나온다. hard: true — main()에서 exit 2 처리.
+async function checkImageMeta(filePath, keyword) {
+  const results = [];
+  let meta;
+  try {
+    const metaRaw = await readFile(join(dirname(filePath), 'metadata.json'), 'utf8');
+    meta = JSON.parse(metaRaw);
+  } catch {
+    results.push({
+      name: '이미지 메타(subject/points)',
+      pass: false,
+      hard: true,
+      detail: 'metadata.json을 찾을 수 없거나 파싱 실패 — image_subject/image_points 확인 불가',
+    });
+    return results;
+  }
+
+  const subject = (meta.image_subject || '').trim();
+  const points = Array.isArray(meta.image_points)
+    ? meta.image_points.filter((p) => typeof p === 'string' && p.trim())
+    : [];
+
+  const subjectIsKeyword = keyword && subject && subject === keyword.trim();
+  const subjectOk = subject.length > 0 && !subjectIsKeyword;
+  results.push({
+    name: '이미지 subject',
+    pass: subjectOk,
+    hard: true,
+    detail: !subject
+      ? 'image_subject 비어 있음 — generate-images.js가 즉시 실패함'
+      : subjectIsKeyword
+        ? `image_subject가 키워드("${keyword}")를 그대로 반복 — 구체적인 장면으로 재작성 필요`
+        : `"${subject}"`,
+  });
+
+  const pointsOk = points.length >= 2;
+  results.push({
+    name: '이미지 points',
+    pass: pointsOk,
+    hard: true,
+    detail: pointsOk
+      ? `${points.length}개 (${points.join(' / ')})`
+      : `${points.length}개 — 최소 2개 필요 (배열 형태, 예: ["포인트1", "포인트2"])`,
+  });
+
+  return results;
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (!args.file) {
@@ -274,12 +536,17 @@ async function main() {
     process.exit(2);
   }
 
+  const banned = await loadBannedWords();
+  const facts = await loadFacts();
   const raw = await readFile(args.file, 'utf8');
   const isHtml = /<[a-z][\s\S]*>/i.test(raw);
   const text = isHtml ? stripHtml(raw) : raw;
 
-  const report = check(text, raw, args.keyword);
+  const report = check(text, raw, args.keyword, banned);
   const titleResults = checkTitle(raw, args.keyword);
+  const imageMetaResults = await checkImageMeta(args.file, args.keyword);
+  const factResults = checkFactClaims(text, facts);
+  const allResults = [...report.results, ...titleResults, ...imageMetaResults, ...factResults];
 
   console.log(`\n📋 블로그 품질 리포트`);
   console.log(`파일: ${args.file}`);
@@ -287,25 +554,41 @@ async function main() {
   console.log(`총 ${report.sentences}문장, 공백제외 ${report.charCount}자\n`);
 
   let warnings = 0;
-  for (const r of [...report.results, ...titleResults]) {
-    const mark = r.pass ? '✅ PASS' : '⚠️  WARN';
+  for (const r of allResults) {
+    const mark = r.pass ? '✅ PASS' : r.hard ? '⛔ FAIL' : '⚠️  WARN';
     console.log(`${mark}  ${r.name.padEnd(16)} — ${r.detail}`);
     if (!r.pass) warnings++;
   }
+
+  const hardFails = allResults.filter((r) => r.hard && !r.pass);
   console.log(
-    `\n결과: ${warnings === 0 ? '모든 검사 통과' : `${warnings}개 경고`}\n`
+    `\n결과: ${warnings === 0 ? '모든 검사 통과' : `${warnings}개 경고 (그중 하드 실패 ${hardFails.length}개)`}\n`
   );
 
   const reportPath = join(dirname(args.file), 'quality-report.json');
   await writeFile(
     reportPath,
     JSON.stringify(
-      { file: args.file, keyword: args.keyword || null, ...report, title_checks: titleResults },
+      {
+        file: args.file,
+        keyword: args.keyword || null,
+        ...report,
+        title_checks: titleResults,
+        image_meta_checks: imageMetaResults,
+        fact_checks: factResults,
+        hard_fail: hardFails.length > 0,
+        hard_fail_items: hardFails.map((r) => r.name),
+      },
       null,
       2
     )
   );
   console.log(`리포트 저장: ${reportPath}`);
+
+  if (hardFails.length > 0) {
+    console.error(`\n⛔ 하드 실패 항목(${hardFails.map((r) => r.name).join(', ')}) — 수정 후 재검사 필요.`);
+    process.exit(2);
+  }
 }
 
 main().catch((e) => {
