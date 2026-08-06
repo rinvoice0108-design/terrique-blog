@@ -115,6 +115,53 @@ function checkFactClaims(text, facts) {
   return results;
 }
 
+/**
+ * 대외 비공개 정보가 본문에 새어나갔는지 검사한다.
+ *
+ * facts.json 의 confidential:true 항목은 사내 참고용이라, 그 text 를 그대로
+ * 가져다 쓰면 공개하면 안 되는 내용(제조공장 상호·소재지 등)이 딸려 나온다.
+ * blog-writer 에게 프롬프트로 알려주는 것만으로는 놓치므로 여기서 막는다.
+ *
+ * 판정 대상은 confidential 항목의 text 에는 있고 public_alt 에는 없는
+ * 고유명사류 토큰 — 즉 '공개 버전에서 의도적으로 빠진 말'이다.
+ */
+function checkConfidentialLeak(text, facts) {
+  const results = [];
+  const confidential = facts.filter((f) => f.confidential);
+  if (!confidential.length) return results;
+
+  const secrets = new Set();
+  for (const f of confidential) {
+    const pub = (f.public_alt || '').replace(/\s+/g, '').toLowerCase();
+    // 영문 상호(2단어 이상)와 한글 고유명사 후보를 뽑는다
+    const tokens = [
+      ...(f.text.match(/[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z.]+)+/g) || []),
+      // 지명·상호는 대개 괄호 닫힘/쉼표/'공장' 앞에 온다 (예: "…(인도 구자라트)")
+      ...(f.text.match(/[가-힣]{2,}(?=\s*[),]|\s*공장)/g) || []),
+    ];
+    for (const t of tokens) {
+      const norm = t.replace(/\s+/g, '').toLowerCase();
+      // public_alt 에도 들어 있으면 공개해도 되는 말이다
+      if (norm.length >= 4 && !pub.includes(norm)) secrets.add(t.trim());
+    }
+  }
+
+  const hits = [...secrets].filter((s) =>
+    text.replace(/\s+/g, '').toLowerCase().includes(s.replace(/\s+/g, '').toLowerCase()),
+  );
+
+  results.push({
+    name: '대외 비공개 정보 유출',
+    pass: hits.length === 0,
+    detail:
+      hits.length === 0
+        ? '비공개 항목(제조공장 상호 등) 노출 없음'
+        : `⚠️ 대외 비공개 정보가 본문에 있음: ${hits.join(', ')} — facts.json 의 public_alt 표현으로 교체할 것`,
+  });
+
+  return results;
+}
+
 // 부분문자열 오탐 방지 — '완전'이 '완전히'/'불완전'에 걸리는 것처럼, 부정 접두사
 // 뒤나 부사화 접미사 앞에 붙어 다른 단어가 된 경우는 제외.
 const NEGATION_PREFIXES = new Set(['불', '비']);
@@ -546,7 +593,14 @@ async function main() {
   const titleResults = checkTitle(raw, args.keyword);
   const imageMetaResults = await checkImageMeta(args.file, args.keyword);
   const factResults = checkFactClaims(text, facts);
-  const allResults = [...report.results, ...titleResults, ...imageMetaResults, ...factResults];
+  const leakResults = checkConfidentialLeak(text, facts);
+  const allResults = [
+    ...report.results,
+    ...titleResults,
+    ...imageMetaResults,
+    ...factResults,
+    ...leakResults,
+  ];
 
   console.log(`\n📋 블로그 품질 리포트`);
   console.log(`파일: ${args.file}`);
