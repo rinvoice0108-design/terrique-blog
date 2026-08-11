@@ -35,8 +35,8 @@ function parseArgs(argv) {
   return args;
 }
 
+// 검색·검색어트렌드·쇼핑인사이트 전부 같은 NAVER API HUB 게이트웨이를 쓴다(경로만 다름).
 const SEARCH_BASE = 'https://naverapihub.apigw.ntruss.com';
-const DATALAB_BASE = 'https://naveropenapi.apigw.ntruss.com';
 
 function naverAuth() {
   const id = process.env.NAVER_CLIENT_ID;
@@ -65,14 +65,13 @@ async function naverSearch(kind, query, display = 30, sort = 'sim') {
 
 // 데이터랩 검색어트렌드 — 실제 검색량 상대지수(최근 90일, 주간).
 // "최근 30일 포스팅 비율"은 어디까지나 블로그 발행량 추정치였는데, 이건 진짜 검색 수요다.
-// ⚠️ NAVER API HUB 콘솔에 나열돼 있어도 "이용 신청" 승인이 별도로 필요할 수 있다
-//    (2026-08-11 확인 — Permission Denied: subscription required). 승인 전엔 실패하는 게
-//    정상이라 research.js 전체를 죽이지 않고 null로 넘어간다.
+// ⚠️ 경로가 검색 API와 다르다 — /datalab/v1/... 이 아니라 /search-trend/v1/search 다.
+//    (api.ncloud-docs.com/docs/naver-api-hub-search-trend, 2026-08-11 확인)
 async function trendSearch(query) {
   const end = new Date();
   const start = new Date(end.getTime() - 90 * 24 * 3600 * 1000);
   const fmt = (d) => d.toISOString().slice(0, 10);
-  const res = await fetch(`${DATALAB_BASE}/datalab/v1/search`, {
+  const res = await fetch(`${SEARCH_BASE}/search-trend/v1/search`, {
     method: 'POST',
     headers: { ...naverAuth(), 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -84,7 +83,7 @@ async function trendSearch(query) {
   });
   const json = await res.json();
   if (!res.ok || json.error) {
-    throw new Error(`Naver DataLab trend error: ${json.error?.message || res.status}`);
+    throw new Error(`Naver Search Trend error: ${json.error?.message || res.status}`);
   }
   const points = json.results?.[0]?.data || [];
   if (points.length < 2) return { points, momentum_percent: 0, direction: '데이터 부족' };
@@ -98,15 +97,17 @@ async function trendSearch(query) {
 }
 
 // 데이터랩 쇼핑인사이트 — 카테고리 코드가 있어야 조회된다(키워드만으로 카테고리를
-// 자동 판별하는 공식 API가 없음). NAVER_SHOPPING_CATEGORY_ID를 .env에 설정해야 켜짐 —
-// 잘못된 카테고리로 억지로 채우면 근거 없는 숫자가 되므로, 미설정 시 조용히 건너뛴다.
+// 자동 판별하는 공식 API가 없음 — 네이버쇼핑에서 카테고리 선택 시 URL의 cat_id로 확인).
+// NAVER_SHOPPING_CATEGORY_ID를 .env에 설정해야 켜짐 — 잘못된 카테고리로 억지로 채우면
+// 근거 없는 숫자가 되므로, 미설정 시 조용히 건너뛴다.
+// 경로: /shopping/v1/category/keywords, keyword는 {name, param} 객체 배열(최대 5개).
 async function shoppingInsight(query) {
   const categoryId = process.env.NAVER_SHOPPING_CATEGORY_ID;
   if (!categoryId) return null;
   const end = new Date();
   const start = new Date(end.getTime() - 90 * 24 * 3600 * 1000);
   const fmt = (d) => d.toISOString().slice(0, 10);
-  const res = await fetch(`${DATALAB_BASE}/datalab/v1/shopping/category/keywords`, {
+  const res = await fetch(`${SEARCH_BASE}/shopping/v1/category/keywords`, {
     method: 'POST',
     headers: { ...naverAuth(), 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -114,12 +115,12 @@ async function shoppingInsight(query) {
       endDate: fmt(end),
       timeUnit: 'week',
       category: categoryId,
-      keyword: query,
+      keyword: [{ name: query, param: [query] }],
     }),
   });
   const json = await res.json();
   if (!res.ok || json.error) {
-    throw new Error(`Naver DataLab shopping insight error: ${json.error?.message || res.status}`);
+    throw new Error(`Naver Shopping Insight error: ${json.error?.message || res.status}`);
   }
   return json.results?.[0]?.data || [];
 }
