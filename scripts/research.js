@@ -6,6 +6,12 @@
  *
  * 환경변수: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET
  * 미설정 시 명확한 에러 + 종료. (웹 검색 대체는 Claude가 수동 수행)
+ *
+ * ⚠️ 2026-07-31부로 개발자센터(openapi.naver.com) 검색 API 신규 발급이 막히고
+ *    NAVER API HUB(NCP)로 이관됐다 — 검색(블로그/카페/지식인)은
+ *    naverapihub.apigw.ntruss.com, 데이터랩(검색어트렌드/쇼핑인사이트)은
+ *    naveropenapi.apigw.ntruss.com — 도메인이 다르다(terrique-scout도 동일 정리,
+ *    src/lib/blog/openapi.ts 참고). 둘 다 헤더는 X-NCP-APIGW-API-KEY-ID / -KEY.
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -29,7 +35,10 @@ function parseArgs(argv) {
   return args;
 }
 
-async function naverSearch(kind, query, display = 30, sort = 'sim') {
+const SEARCH_BASE = 'https://naverapihub.apigw.ntruss.com';
+const DATALAB_BASE = 'https://naveropenapi.apigw.ntruss.com';
+
+function naverAuth() {
   const id = process.env.NAVER_CLIENT_ID;
   const secret = process.env.NAVER_CLIENT_SECRET;
   if (!id || !secret) {
@@ -37,22 +46,82 @@ async function naverSearch(kind, query, display = 30, sort = 'sim') {
       'NAVER_CLIENT_ID / NAVER_CLIENT_SECRET not set. Set them in .env.'
     );
   }
-  const url = `https://openapi.naver.com/v1/search/${kind}?query=${encodeURIComponent(
+  return { 'X-NCP-APIGW-API-KEY-ID': id, 'X-NCP-APIGW-API-KEY': secret };
+}
+
+async function naverSearch(kind, query, display = 30, sort = 'sim') {
+  const url = `${SEARCH_BASE}/search/v1/${kind}?query=${encodeURIComponent(
     query
-  )}&display=${display}&sort=${sort}`;
-  const res = await fetch(url, {
-    headers: {
-      'X-Naver-Client-Id': id,
-      'X-Naver-Client-Secret': secret,
-    },
-  });
+  )}&display=${display}&sort=${sort}&format=json`;
+  const res = await fetch(url, { headers: naverAuth() });
   const json = await res.json();
-  if (!res.ok || json.errorCode) {
+  if (!res.ok || json.errorCode || json.error) {
     throw new Error(
-      `Naver API error (${kind}): ${json.errorMessage || res.status}`
+      `Naver API error (${kind}): ${json.errorMessage || json.error?.message || res.status}`
     );
   }
   return json;
+}
+
+// 데이터랩 검색어트렌드 — 실제 검색량 상대지수(최근 90일, 주간).
+// "최근 30일 포스팅 비율"은 어디까지나 블로그 발행량 추정치였는데, 이건 진짜 검색 수요다.
+// ⚠️ NAVER API HUB 콘솔에 나열돼 있어도 "이용 신청" 승인이 별도로 필요할 수 있다
+//    (2026-08-11 확인 — Permission Denied: subscription required). 승인 전엔 실패하는 게
+//    정상이라 research.js 전체를 죽이지 않고 null로 넘어간다.
+async function trendSearch(query) {
+  const end = new Date();
+  const start = new Date(end.getTime() - 90 * 24 * 3600 * 1000);
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  const res = await fetch(`${DATALAB_BASE}/datalab/v1/search`, {
+    method: 'POST',
+    headers: { ...naverAuth(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      startDate: fmt(start),
+      endDate: fmt(end),
+      timeUnit: 'week',
+      keywordGroups: [{ groupName: query, keywords: [query] }],
+    }),
+  });
+  const json = await res.json();
+  if (!res.ok || json.error) {
+    throw new Error(`Naver DataLab trend error: ${json.error?.message || res.status}`);
+  }
+  const points = json.results?.[0]?.data || [];
+  if (points.length < 2) return { points, momentum_percent: 0, direction: '데이터 부족' };
+  const half = Math.floor(points.length / 2);
+  const avg = (arr) => arr.reduce((s, p) => s + p.ratio, 0) / (arr.length || 1);
+  const recentAvg = avg(points.slice(half));
+  const priorAvg = avg(points.slice(0, half));
+  const momentum = priorAvg === 0 ? 0 : ((recentAvg - priorAvg) / priorAvg) * 100;
+  const direction = momentum > 15 ? '상승' : momentum < -15 ? '하락' : '보합';
+  return { points, momentum_percent: Number(momentum.toFixed(1)), direction };
+}
+
+// 데이터랩 쇼핑인사이트 — 카테고리 코드가 있어야 조회된다(키워드만으로 카테고리를
+// 자동 판별하는 공식 API가 없음). NAVER_SHOPPING_CATEGORY_ID를 .env에 설정해야 켜짐 —
+// 잘못된 카테고리로 억지로 채우면 근거 없는 숫자가 되므로, 미설정 시 조용히 건너뛴다.
+async function shoppingInsight(query) {
+  const categoryId = process.env.NAVER_SHOPPING_CATEGORY_ID;
+  if (!categoryId) return null;
+  const end = new Date();
+  const start = new Date(end.getTime() - 90 * 24 * 3600 * 1000);
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  const res = await fetch(`${DATALAB_BASE}/datalab/v1/shopping/category/keywords`, {
+    method: 'POST',
+    headers: { ...naverAuth(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      startDate: fmt(start),
+      endDate: fmt(end),
+      timeUnit: 'week',
+      category: categoryId,
+      keyword: query,
+    }),
+  });
+  const json = await res.json();
+  if (!res.ok || json.error) {
+    throw new Error(`Naver DataLab shopping insight error: ${json.error?.message || res.status}`);
+  }
+  return json.results?.[0]?.data || [];
 }
 
 const stripTags = (s) => (s || '').replace(/<[^>]+>/g, '');
@@ -112,9 +181,14 @@ function competitionLevel(blogTotal, cafeTotal = 0) {
 }
 
 // 기회도 점수 0~100: 낮은 경쟁 + 높은 최신 활동 = 높은 점수
-function opportunityScore(blogTotal, cafeTotal, recentRatioPct) {
+// 최신 활동은 두 신호를 반반 섞는다 — recentRatioPct(블로그 발행량 추정)과
+// trendMomentumPct(데이터랩 실제 검색량 증감, 90일). 데이터랩이 없던 시절엔
+// 추정치 하나뿐이었는데, 실측이 생겼으니 계속 무시할 이유가 없다.
+function opportunityScore(blogTotal, cafeTotal, recentRatioPct, trendMomentumPct = 0) {
   const compScore = Math.max(0, 100 - (blogTotal / 1500)); // 경쟁 낮을수록 높음
-  const actScore = Math.min(100, recentRatioPct * 2.5);    // 최신 활동 높을수록 높음
+  const estActScore = Math.min(100, recentRatioPct * 2.5);
+  const trendActScore = Math.min(100, Math.max(0, 50 + trendMomentumPct)); // 0%=보합→50점 기준
+  const actScore = estActScore * 0.5 + trendActScore * 0.5;
   const score = Math.round(compScore * 0.6 + actScore * 0.4);
   const label = score >= 70 ? '★★★ 강추' : score >= 45 ? '★★ 권장' : '★ 주의';
   return { score: Math.min(100, score), label };
@@ -194,11 +268,12 @@ async function main() {
   const keyword = args.keyword;
   console.log(`\n🔎 네이버 리서치: "${keyword}"`);
 
-  let blogRecent, blogCount, cafe;
+  let blogRecent, blogCount, cafe, kin;
   try {
     blogRecent = await naverSearch('blog', keyword, 30, 'date');
     blogCount = await naverSearch('blog', keyword, 1, 'sim');
     cafe = await naverSearch('cafearticle', keyword, 20, 'sim');
+    kin = await naverSearch('kin', keyword, 20, 'sim');
   } catch (e) {
     console.error(`\n❌ ${e.message}`);
     console.error(
@@ -207,11 +282,26 @@ async function main() {
     process.exit(1);
   }
 
+  // 데이터랩(검색어트렌드/쇼핑인사이트)은 NCP 콘솔에 나열돼 있어도 "이용 신청" 승인이
+  // 별도로 필요할 수 있어(2026-08-11 확인) 실패해도 본 리서치를 죽이지 않는다.
+  let trend = { points: [], momentum_percent: 0, direction: '조회 실패' };
+  try {
+    trend = await trendSearch(keyword);
+  } catch (e) {
+    console.error(`⚠️  검색어트렌드 조회 실패(계속 진행): ${e.message}`);
+  }
+  let shopping = null;
+  try {
+    shopping = await shoppingInsight(keyword);
+  } catch (e) {
+    console.error(`⚠️  쇼핑인사이트 조회 실패(계속 진행): ${e.message}`);
+  }
+
   const totalBlog = blogCount.total || 0;
   const totalCafe = cafe.total || 0;
   const related = extractRelatedWords(blogRecent.items || [], keyword);
   const { ratio: recentRatioPct, velocity } = recentRatio(blogRecent.items || []);
-  const opportunity = opportunityScore(totalBlog, totalCafe, recentRatioPct);
+  const opportunity = opportunityScore(totalBlog, totalCafe, recentRatioPct, trend.momentum_percent);
   const gap = gapAnalysis(blogRecent.items || []);
 
   // 롱테일: 관련 키워드 × 의도 접미어 조합 (중복 제거, 최대 12개)
@@ -257,6 +347,18 @@ async function main() {
         .slice(0, 10)
         .map((it) => stripTags(it.title)),
     },
+    kin: {
+      total: kin.total || 0,
+      sample_titles: (kin.items || [])
+        .slice(0, 10)
+        .map((it) => stripTags(it.title)),
+    },
+    trend: {
+      momentum_percent: trend.momentum_percent,
+      direction: trend.direction,
+      weekly_points: trend.points,
+    },
+    shopping_insight: shopping, // NAVER_SHOPPING_CATEGORY_ID 미설정이면 null
     opportunity,
     related_keywords: related,
     longtail_suggestions,
@@ -268,7 +370,12 @@ async function main() {
   console.log(`\n📊 경쟁도`);
   console.log(`  블로그 전체: ${totalBlog.toLocaleString()}건 → ${report.blog.competition}`);
   console.log(`  카페 전체:   ${totalCafe.toLocaleString()}건`);
-  console.log(`  최근 30일 비율: ${recentRatioPct}%  트렌드: ${velocity}`);
+  console.log(`  최근 30일 비율(추정): ${recentRatioPct}%  ${velocity}`);
+  console.log(`  검색어트렌드(실측, 90일): ${trend.direction} (${trend.momentum_percent > 0 ? '+' : ''}${trend.momentum_percent}%)`);
+  if (shopping) {
+    console.log(`  쇼핑인사이트: 최근 데이터 ${shopping.length}주 확보 (report.shopping_insight 참고)`);
+  }
+  console.log(`  지식인 질문: ${(kin.total || 0).toLocaleString()}건`);
   console.log(`\n🎯 기회도 점수: ${opportunity.score}/100  ${opportunity.label}`);
 
   console.log(`\n🛒 키워드 구매 여정 단계 (고객의눈 4단계 이론)`);

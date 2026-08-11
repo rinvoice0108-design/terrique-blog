@@ -179,17 +179,3 @@ export function logFingerprintWarning(candidate, similarKeywords) {
     // 로그 기록 실패해도 픽 로직은 계속 진행
   }
 }
-
-// 모든 키워드의 B열 사용일 초기화 (순환 리셋)
-export async function clearAllUsedDates(sheetsId, rows) {
-  const auth = getAuth();
-  if (!auth) return;
-
-  const sheets = google.sheets({ version: 'v4', auth });
-  const data = rows.map(r => ({ range: `B${r.rowIndex}`, values: [['']] }));
-  await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId: sheetsId,
-    requestBody: { valueInputOption: 'RAW', data },
-  });
-  console.log(`[sheets] 순환 리셋 — ${rows.length}개 사용일 초기화`);
-}

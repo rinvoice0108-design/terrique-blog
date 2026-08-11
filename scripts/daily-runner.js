@@ -225,15 +225,14 @@ async function main() {
   const unused = allRows.filter(r => !r.usedDate).length;
   console.log(`[runner] 사용됨: ${used}개 / 미사용: ${unused}개`);
 
-  let { picked, reset } = pickUnused(allRows);
+  const { picked, reset } = pickUnused(allRows);
 
+  // ⚠️ 예전엔 여기서 clearAllUsedDates()로 B열 전체를 초기화하고 순환 재사용했다.
+  // 이미 발행된 주제가 경고 없이 그대로 다시 뽑히는 부작용이 있어(2026-08-11 지적)
+  // 순환을 없앴다 — 미사용 주제가 없으면 그냥 멈추고, 사람이 시트에 새 주제를 채워야 한다.
   if (reset) {
-    console.log('[runner] 모든 키워드 사용 완료 — 순환 초기화 후 처음부터 시작');
-    // B열 전체 초기화 후 다시 선택
-    const { clearAllUsedDates } = await import('./sheets-tracker.js');
-    await clearAllUsedDates(env.SHEETS_ID, allRows);
-    const refreshed = await fetchKeywordsWithStatus(env.SHEETS_ID);
-    picked = pickUnused(refreshed).picked;
+    console.log('[runner] 미사용 키워드가 없습니다 — 시트에 새 주제를 추가해주세요. 발행 건너뜀.');
+    process.exit(0);
   }
 
   console.log(`[runner] 오늘의 키워드: ${picked.map(r => r.keyword).join(' / ')}`);
