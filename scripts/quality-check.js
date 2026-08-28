@@ -292,7 +292,33 @@ function checkAiStyle(text, sentences) {
     detail: doublePassiveHits.length === 0 ? '없음' : `발견(단일 피동으로 수정 권장): ${doublePassiveHits.join(', ')}`,
   });
 
+  results.push(...checkPartialIdioms(sentences));
+
   return results;
+}
+
+// 관용구 일부 생략 검사 — "갸웃하셨다면 잘 오셨습니다"처럼 무엇이 갸웃했는지
+// (고개를) 빠뜨리면 무엇을 갸웃했는지 알 수 없어 부자연스럽다. LLM이 공감형
+// 도입부를 지어낼 때 관용구를 축약해버리는 사례가 실제로 있었음(2026-08-28).
+const PARTIAL_IDIOMS = [
+  { fragment: '갸웃', requires: '고개', full: '고개를 갸웃' },
+];
+function checkPartialIdioms(sentences) {
+  const hits = [];
+  for (const { fragment, requires, full } of PARTIAL_IDIOMS) {
+    for (const s of sentences) {
+      if (s.includes(fragment) && !s.includes(requires)) {
+        hits.push(`"...${s.trim().slice(0, 24)}..." — "${fragment}"는 "${requires}"와 함께 "${full}" 형태로 쓸 것`);
+      }
+    }
+  }
+  return [
+    {
+      name: '관용구 일부 생략',
+      pass: hits.length === 0,
+      detail: hits.length === 0 ? '없음' : hits.join(' / '),
+    },
+  ];
 }
 
 function check(text, raw, keyword, banned) {
