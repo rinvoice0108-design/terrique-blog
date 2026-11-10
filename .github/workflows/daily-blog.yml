@@ -81,6 +81,8 @@ jobs:
           echo "BRAND_ACCENT=#A08878" >> .env
           echo "GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}" >> .env
           echo "SHEETS_ID=${{ secrets.SHEETS_ID }}" >> .env
+          echo "MAIL_TO_PERSONAL=${{ secrets.MAIL_TO_PERSONAL }}" >> .env
+          echo "MAIL_TO_BRAND=${{ secrets.MAIL_TO_BRAND }}" >> .env
 
       - name: Check output folder before
         run: ls -la output/ || echo "output 폴더 없음"

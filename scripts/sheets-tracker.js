@@ -21,7 +21,16 @@ function getAuth() {
   });
 }
 
-// A열 키워드, B열 사용일 읽기
+// C열(블로그 구분): "개인" / "브랜드" / "개인,브랜드". 비어 있으면(옛 주제) 브랜드 블로그 1개만 만든다.
+export function parseBlogTargets(cell) {
+  const text = String(cell || '');
+  const out = [];
+  if (text.includes('개인')) out.push('개인');
+  if (text.includes('브랜드')) out.push('브랜드');
+  return out.length ? out : ['브랜드'];
+}
+
+// A열 키워드, B열 사용일, C열 블로그 구분 읽기
 export async function fetchKeywordsWithStatus(sheetsId) {
   const auth = getAuth();
   if (!auth) throw new Error('service-account.json 없음');
@@ -29,7 +38,7 @@ export async function fetchKeywordsWithStatus(sheetsId) {
   const sheets = google.sheets({ version: 'v4', auth });
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetsId,
-    range: 'A:B',
+    range: 'A:C',
   });
 
   const rows = res.data.values || [];
@@ -49,7 +58,7 @@ export async function fetchKeywordsWithStatus(sheetsId) {
     if (/^\d+$/.test(keyword)) continue;
 
     const usedDate = rows[i][1]?.trim() || '';
-    result.push({ keyword, usedDate, rowIndex: i + 1 }); // 1-based
+    result.push({ keyword, usedDate, blogs: parseBlogTargets(rows[i][2]), rowIndex: i + 1 }); // 1-based
   }
 
   return result;

@@ -71,8 +71,14 @@ function mdToHtml(md) {
     .replace(/(<img[^>]*>)(\s*<br>)/g, '$1');
 }
 
-const BLOG_LABELS = ['개인 블로그', '브랜드 블로그'];
-const BLOG_BADGE_COLORS = ['#A08878', '#D97A3A'];
+// 개인/브랜드 구분은 순서가 아니라 주제(시트 C열)에서 고른 값(post.blogType)을 따른다.
+const BLOG_LABELS = { 개인: '개인 블로그', 브랜드: '브랜드 블로그' };
+const BLOG_BADGE_COLORS = { 개인: '#A08878', 브랜드: '#D97A3A' };
+// 수신자: 개인 블로그 → MAIL_TO_PERSONAL, 브랜드 블로그 → MAIL_TO_BRAND (없으면 MAIL_TO, 그것도 없으면 발신 계정)
+function recipientFor(blogType, env) {
+  const specific = blogType === '개인' ? env.MAIL_TO_PERSONAL : env.MAIL_TO_BRAND;
+  return (specific && specific.trim()) || env.MAIL_TO || GMAIL_USER;
+}
 
 // quality-report.json 요약 — 통과/경고/하드실패 개수와 실패 항목명만 간단히
 function buildQualitySummary(report) {
@@ -101,9 +107,9 @@ function buildQualitySummary(report) {
 }
 
 function buildCard(p, i) {
-  const blogLabel = BLOG_LABELS[i];
+  const blogLabel = BLOG_LABELS[p.blogType];
   const blogBadge = blogLabel
-    ? `<span style="display:inline-block;background:${BLOG_BADGE_COLORS[i]};color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px;letter-spacing:0.5px;vertical-align:middle;margin-left:7px;">[${blogLabel}]</span>`
+    ? `<span style="display:inline-block;background:${BLOG_BADGE_COLORS[p.blogType]};color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px;letter-spacing:0.5px;vertical-align:middle;margin-left:7px;">[${blogLabel}]</span>`
     : '';
 
   const header = `
@@ -140,8 +146,29 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// 개인/브랜드 블로그 글을 나눠서, 각각 맞는 수신자에게 따로 보낸다.
 export async function sendEmail(posts, env) {
-  const mailTo = env.MAIL_TO || GMAIL_USER;
+  const groups = new Map();
+  for (const p of posts) {
+    const type = p.blogType === '개인' ? '개인' : '브랜드';
+    if (!groups.has(type)) groups.set(type, []);
+    groups.get(type).push(p);
+  }
+  let firstErr = null;
+  for (const [type, list] of groups) {
+    try {
+      await sendGroupEmail(list, env, type);
+    } catch (e) {
+      console.error(`[email] ✗ ${type} 블로그 메일 실패: ${e.message}`);
+      firstErr = firstErr || e;
+    }
+  }
+  if (firstErr) throw firstErr;
+}
+
+async function sendGroupEmail(posts, env, blogType) {
+  const mailTo = recipientFor(blogType, env);
+  const blogLabel = BLOG_LABELS[blogType];
 
   const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
@@ -165,7 +192,7 @@ export async function sendEmail(posts, env) {
 <div style="max-width:680px;margin:0 auto;padding:24px;">
 
   <div style="background:#A08878;color:#fff;padding:18px 24px;border-radius:10px;margin-bottom:22px;">
-    <div style="font-size:20px;font-weight:700;">📝 테리크 블로그 일일 리포트</div>
+    <div style="font-size:20px;font-weight:700;">📝 테리크 ${blogLabel} 일일 리포트</div>
     <div style="opacity:.85;font-size:13px;margin-top:6px;">${today} &nbsp;·&nbsp; 포스트 ${posts.length}개 완성</div>
   </div>
 
@@ -194,7 +221,7 @@ export async function sendEmail(posts, env) {
   const mailOptions = {
     from: `테리크 블로그 <${GMAIL_USER}>`,
     to: mailTo,
-    subject: `[테리크 블로그] ${today} 포스트 ${posts.length}개 완성`,
+    subject: `[테리크 ${blogLabel}] ${today} 포스트 ${posts.length}개 완성`,
     html,
     attachments,
   };

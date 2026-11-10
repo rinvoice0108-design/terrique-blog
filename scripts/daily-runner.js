@@ -60,11 +60,12 @@ function pickUnused(allRows, n = 2) {
 }
 
 // ── 블로그 생성 ──────────────────────────────────────────────────
-function runBlogNew(keyword) {
-  console.log(`\n[runner] ▶ 시작: "${keyword}"`);
+// blogType: '개인' | '브랜드' — 시트 C열(블로그 구분)에서 고른 값. /blog-new 가 개인이면 폴더명 끝에 _개인을 붙인다.
+function runBlogNew(keyword, blogType = '브랜드') {
+  console.log(`\n[runner] ▶ 시작: "${keyword}" (${blogType} 블로그)`);
   try {
     execSync(
-      `claude --print --dangerously-skip-permissions "/blog-new \\"${keyword}\\""`,
+      `claude --print --dangerously-skip-permissions "/blog-new \\"${keyword}\\" --blog=${blogType}"`,
       { cwd: ROOT, timeout: 1_800_000, stdio: 'inherit' }
     );
     console.log(`[runner] ✓ 완료: "${keyword}"`);
@@ -202,6 +203,8 @@ function buildPostDataFromDir(folderName) {
     images,
     heroImage,
     qualityReport,
+    // 개인/브랜드 구분 — metadata.blog_type 우선, 없으면 폴더명 접미사(_개인), 그래도 없으면 브랜드
+    blogType: metadata.blog_type === '개인' || /_개인$/.test(folderName) ? '개인' : '브랜드',
     isCI,
     previewPath: isCI ? null : `file:///${previewPath.replace(/\\/g, '/')}`
   };
@@ -240,9 +243,14 @@ async function main() {
   // 실행 전 폴더 목록 캡처
   const beforeFolders = getOutputFolderSet();
 
+  // 주제 하나가 개인·브랜드 둘 다로 선택돼 있으면 블로그별로 한 편씩(총 2편) 만든다.
   const succeeded = [];
   for (const row of picked) {
-    if (runBlogNew(row.keyword)) succeeded.push(row);
+    let ok = false;
+    for (const blogType of row.blogs || ['브랜드']) {
+      if (runBlogNew(row.keyword, blogType)) ok = true;
+    }
+    if (ok) succeeded.push(row);
   }
 
   // 실행 후 새로 생긴 폴더 감지 — execSync가 타임아웃으로 죽어도
