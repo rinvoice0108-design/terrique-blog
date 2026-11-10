@@ -228,7 +228,24 @@ async function main() {
   const unused = allRows.filter(r => !r.usedDate).length;
   console.log(`[runner] 사용됨: ${used}개 / 미사용: ${unused}개`);
 
-  const { picked, reset } = pickUnused(allRows);
+  // scout "블로그 주제"에서 사람이 고른 주제(TOPICS, 구분자 |||)가 있으면 그것만 만든다(미사용 주제 중에서, 최대 2개).
+  // 없으면 예전처럼 시트의 미사용 주제를 순서대로 2개 고른다.
+  const requested = String(env.TOPICS || '').split('|||').map(t => t.trim()).filter(Boolean);
+  let { picked, reset } = pickUnused(allRows);
+  if (requested.length > 0) {
+    const chosen = requested
+      .map(kw => allRows.find(r => !r.usedDate && r.keyword === kw))
+      .filter(Boolean)
+      .slice(0, 2);
+    if (chosen.length > 0) {
+      picked = chosen;
+      reset = false;
+      console.log(`[runner] 지정된 주제 사용: ${chosen.map(r => r.keyword).join(' / ')}`);
+    } else {
+      console.warn('[runner] 지정된 주제가 시트에 없거나 이미 사용됨 — 건너뜀');
+      process.exit(0);
+    }
+  }
 
   // ⚠️ 예전엔 여기서 clearAllUsedDates()로 B열 전체를 초기화하고 순환 재사용했다.
   // 이미 발행된 주제가 경고 없이 그대로 다시 뽑히는 부작용이 있어(2026-08-11 지적)

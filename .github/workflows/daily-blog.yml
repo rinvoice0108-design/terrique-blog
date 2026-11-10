@@ -2,6 +2,11 @@ name: 테리크 블로그 일일 자동화
 
 on:
   workflow_dispatch:  # 수동 실행만 활성화 (스케줄 중지)
+    inputs:
+      topics:
+        description: '이번에 만들 주제(구분자 |||). 비우면 시트의 미사용 주제를 순서대로 2개 고른다 — scout 블로그 주제 화면에서 고른 주제가 여기로 들어온다'
+        required: false
+        default: ''
 
 jobs:
   # ── Job 1: 평일·공휴일 게이트 ────────────────────────────────────
@@ -92,6 +97,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           CI: 'true'
+          TOPICS: ${{ github.event.inputs.topics }}
         run: node scripts/daily-runner.js
 
       - name: Check output folder after
